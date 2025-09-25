@@ -1,18 +1,23 @@
-import socket
-import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, scrolledtext, messagebox
+from tkinter import PhotoImage, filedialog
+import ttkbootstrap as tb
+from ttkbootstrap.constants import *
+from ttkbootstrap.window import Window
+from ttkbootstrap.scrolled import ScrolledText
+import threading
+import socket
 import json
-import os
-#if doenst exist
-try:
-    from PIL import Image, ImageTk
-except:
-    Image = None
-    ImageTk = None
-# =========================
-# Utility functions for JSON protocol
-# =========================
+import os 
+
+DOWNLOAD_DIR = "downloaded/"
+def setup_download_directory(directory_name):
+    if not os.path.exists(directory_name):
+        print(f"[CLIENT] Download directory '{directory_name}' not found. Creating it now.")
+
+        os.makedirs(directory_name, exist_ok=True)
+    else:
+        print(f"[CLIENT] Download directory '{directory_name}' found.")
+ 
 def send_control(sock, data: dict):
     """Send a JSON control message with a fixed header length"""
     j = json.dumps(data).encode('utf-8')
@@ -37,120 +42,85 @@ def recv_control(sock):
     return json.loads(j.decode('utf-8'))
 
 
-# =========================
-# Chat App with Tkinter
-# =========================
-class MyApp(tk.Tk):
-    def __init__(self, host="127.0.0.1", port=5000, username="User"):
-        super().__init__()
+
+class App(Window):
+    def __init__(self, theme_name, username= "User", host="127.0.0.1", port=5000):
+        self.theme_name = theme_name
+        super().__init__(themename= theme_name)
         self.title("Messenger")
         self.geometry("600x700")
-        self.configure(bg="#F7F7FA")
 
-        # Keep username
         self.username = username
 
-        # --- Colors
-        self.color_bg = "#F7F7FA"
-        self.color_panel = "#FFFFFF"
-        self.color_border = "#E5E7EB"
-        self.color_text = "#111827"
-        self.color_muted = "#6B7280"
-        self.color_primary = "#2563EB"
-        self.color_success = "#10B981"
-
-        # --- Layout
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # --- Header
-        header = ttk.Frame(self, padding=(12, 12, 12, 8))
-        header.grid(row=0, column=0, sticky="ew")
+        #header
+
+        header = tb.Frame(self, padding=10)
+        header.grid(row= 0, column=0, sticky="ew")
         header.grid_columnconfigure(1, weight=1)
-
-        # --- Input Bar
-        input_bar = ttk.Frame(self, padding=(12, 8, 12, 12))
-        input_bar.grid(row=3, column=0, sticky="ew")
-        input_bar.grid_columnconfigure(1, weight=1)
-
-        # Load and resize chat icon (send.png)
-        if Image and ImageTk:
-            chat_icon_path = os.path.join(os.path.dirname(__file__), "icons", "send.png")
-            chat_img = Image.open(chat_icon_path)
-            chat_img = chat_img.resize((24, 24), Image.LANCZOS)
-            self.chat_icon = ImageTk.PhotoImage(chat_img)
-            avatar = ttk.Label(header, image=self.chat_icon)
-            self.send_icon = ImageTk.PhotoImage(chat_img)
-            self.send_button = ttk.Button(input_bar,image=self.send_icon ,text="Send", command=self.proccess_msg)
-        else:
-            avatar = ttk.Label(header, text="💬", font=("Segoe UI Emoji", 16))
-            self.send_button = ttk.Button(input_bar, text="Send", command=self.proccess_msg)
-        avatar.grid(row=0, column=0, padx=(0, 8))
-        self.send_button.grid(row=0, column=2, padx=(8, 0))
-
-        title_lbl = ttk.Label(header, text=f"Chat – {self.username}", font=("Segoe UI", 12, "bold"))
-        title_lbl.grid(row=0, column=1, sticky="w")
-
-        status_dot = ttk.Label(header, text="●", foreground=self.color_success)
+        # header.pack(side= TOP, fill= X)
+        title_lable = tb.Label(header, text=f"Chat - {self.username}", font=("Segoe UI", 16, "bold"))
+        title_lable.grid(row=0,column=0,sticky="w")
+        #online dot 
+        status_dot = tb.Label(header, text="●", font=("Segoe UI", 12), foreground="lightgreen")
         status_dot.grid(row=0, column=2, padx=(8, 0))
 
-        # --- Chat Panel
-        body = ttk.Frame(self, padding=(12, 0, 12, 0))
+
+        #body
+
+        body = tb.Frame(self, padding=(12, 0, 12, 0))
         body.grid(row=1, column=0, sticky="nsew")
         body.grid_rowconfigure(0, weight=1)
         body.grid_columnconfigure(0, weight=1)
 
-        chat_container = tk.Frame(body, bg=self.color_panel, highlightthickness=1, highlightbackground=self.color_border)
+        #chat area
+        chat_container = tb.Frame(body)
         chat_container.grid(row=0, column=0, sticky="nsew")
         chat_container.grid_rowconfigure(0, weight=1)
         chat_container.grid_columnconfigure(0, weight=1)
 
-        self.text_area = scrolledtext.ScrolledText(
-            chat_container, wrap=tk.WORD, state=tk.DISABLED,
-            relief=tk.FLAT, bg=self.color_panel, fg=self.color_text,
-            font=("Segoe UI", 10), padx=8, pady=8
-        )
+        self.text_area = ScrolledText(chat_container, bootstyle="primary, round")
         self.text_area.grid(row=0, column=0, sticky="nsew")
 
-        # --- File List Panel
-        file_frame = ttk.LabelFrame(self, text="Files", padding=(12, 8))
-        file_frame.grid(row=2, column=0, sticky="ew", padx=12, pady=6)
+        #file area
 
-        self.file_listbox = tk.Listbox(file_frame, height=6)
-        self.file_listbox.grid(row=0, column=0, sticky="ew")
-        file_frame.grid_columnconfigure(0, weight=1)
+        self.file_frame = tb.LabelFrame(body,text="Files", bootstyle="primary")
+        self.file_frame.grid(row=2, column=0, sticky="nsew")
+        self.file_listbox = tb.Treeview(self.file_frame, bootstyle="dark", columns=("Size",))
+        self.file_listbox.heading("#0", text="Filename")
+        self.file_listbox.heading("Size", text="Size (bytes)")
+        self.file_listbox.column("#0", stretch=tk.YES)
+        self.file_listbox.column("Size", anchor=tk.E, width=100)
+        self.file_listbox.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        self.file_frame.grid_columnconfigure(0, weight=1)
 
-        # Load and resize download icon
-        if Image and ImageTk:
-            download_icon_path = os.path.join(os.path.dirname(__file__), "icons", "download.png")
-            download_img = Image.open(download_icon_path)
-            download_img = download_img.resize((18, 18), Image.LANCZOS)
-            self.download_icon = ImageTk.PhotoImage(download_img)
-            self.download_btn = ttk.Button(file_frame, image=self.download_icon, text="Download Selected", compound="left", command=self.download_file)
-        else:
-            self.download_btn = ttk.Button(file_frame, text="Download Selected", command=self.download_file)
-        self.download_btn.grid(row=0, column=1, padx=(8, 0))
+        #download button 
+        self.download_button = tb.Button(self.file_frame, text="Download", bootstyle=SUCCESS, command=self.download_file)
+        self.download_button.grid(row=0, column=1,sticky="e", padx=(0,5))
+
+        
+        #input bar
+        input_bar = tb.Frame(self, padding=10)
+        input_bar.grid(row= 2, column=0, sticky="ew")
+        input_bar.grid_columnconfigure(2, weight=1)
+
+        self.send_button = tb.Button(input_bar, text="Send", bootstyle=("success"), command=self.proccess_msg)
+        self.send_button.grid(row=0, column=3, sticky = "e", padx= 5)
 
 
-        # Load and resize file icon
-        if Image and ImageTk:
-            file_icon_path = os.path.join(os.path.dirname(__file__), "icons", "file.png")
-            file_img = Image.open(file_icon_path)
-            file_img = file_img.resize((20, 20), Image.LANCZOS)
-            self.file_icon = ImageTk.PhotoImage(file_img)
-            self.choose_file = ttk.Button(input_bar, image=self.file_icon, width=3, command=self.send_file)
-        else:
-            self.choose_file = ttk.Button(input_bar, text="📎", width=3, command=self.send_file)
-        self.choose_file.grid(row=0, column=0, padx=(0, 8))
+        self.file_button = tb.Button(input_bar, text="File", bootstyle=INFO, command=self.send_file)
+        self.file_button.grid(row=0, column=1, sticky = "w",padx= 5)
 
         self.entry_var = tk.StringVar()
-        self.entry = ttk.Entry(input_bar, textvariable=self.entry_var)
-        self.entry.grid(row=0, column=1, sticky="ew")
-        self.entry.bind("<Return>", self.proccess_msg)
+        self.message_entry = tb.Entry(input_bar, width= 50, textvariable=self.entry_var)
+        self.message_entry.grid(row=0, column=2, sticky = "ew")
+        self.message_entry.focus()
 
 
+        #networking 
 
-        # --- Networking
         self.host = host
         self.port = port
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -165,21 +135,19 @@ class MyApp(tk.Tk):
         # On close
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    # =========================
-    # Message functions
-    # =========================
     def proccess_msg(self, event=None):
-        text = self.entry.get().strip()
+        text = self.message_entry.get().strip()
         if not text:
             return
         send_control(self.client, {"type": "MSG", "text": text})
         self.entry_var.set("")
 
     def show_msg(self, msg):
-        self.text_area.config(state=tk.NORMAL)
+        self.text_area.text.config(state="normal")
         self.text_area.insert(tk.END, msg + "\n")
         self.text_area.see(tk.END)
-        self.text_area.config(state=tk.DISABLED)
+        self.text_area.text.config(state="disabled")
+
 
     # =========================
     # File functions
@@ -202,50 +170,63 @@ class MyApp(tk.Tk):
         self.show_msg(f"[You uploaded file: {filename}]")
 
     def download_file(self):
-        selection = self.file_listbox.curselection()
+        # FIX 2: Use Treeview selection logic
+        selection = self.file_listbox.selection()
         if not selection:
             return
-        filename = self.file_listbox.get(selection[0])
+        
+        # Get the filename from the Treeview item's text field (heading #0)
+        selected_item_id = selection[0]
+        filename = self.file_listbox.item(selected_item_id, 'text')
+
+        # filename will be an empty string if it's the root item or somehow invalid, check again
+        if not filename:
+            return
+
         send_control(self.client, {"type": "GET_FILE", "filename": filename})
+        self.show_msg(f"[Requesting file: {filename}]")
 
     # =========================
     # Receiving loop
     # =========================
     def recv_loop(self):
-        try:
-            while self.running:
-                msg = recv_control(self.client)
+            try:
+                while self.running:
+                    msg = recv_control(self.client)
 
-                if msg["type"] == "MSG":
-                    self.show_msg(f"{msg['username']}: {msg['text']}")
-                elif msg["type"] == "USER_JOIN":
-                    self.show_msg(f"[{msg['username']} joined]")
-                elif msg["type"] == "USER_LEFT":
-                    self.show_msg(f"[{msg['username']} left]")
-                elif msg["type"] == "FILE_NOTICE":
-                    self.show_msg(f"[{msg['username']} uploaded file: {msg['filename']}]")
-                    self.file_listbox.insert(tk.END, msg["filename"])
-                elif msg["type"] == "FILE_LIST":
-                    self.file_listbox.delete(0, tk.END)
-                    for f in msg["files"]:
-                        self.file_listbox.insert(tk.END, f["filename"])
-                elif msg["type"] == "FILE_SEND":
-                    filename = msg["filename"]
-                    filesize = int(msg["filesize"])
-                    with open("downloaded_" + filename, "wb") as f:
-                        remaining = filesize
-                        while remaining > 0:
-                            chunk = self.client.recv(min(4096, remaining))
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                            remaining -= len(chunk)
-                    self.show_msg(f"[Downloaded file: {filename}]")
-                elif msg["type"] == "ERROR":
-                    self.show_msg("[Error: " + msg.get("message","") + "]")
-        except Exception as e:
-            print("Error in recv loop:", e)
-            self.destroy()
+                    if msg["type"] == "MSG":
+                        self.show_msg(f"{msg['username']}: {msg['text']}")
+                    elif msg["type"] == "USER_JOIN":
+                        self.show_msg(f"[{msg['username']} joined]")
+                    elif msg["type"] == "USER_LEFT":
+                        self.show_msg(f"[{msg['username']} left]")
+                    elif msg["type"] == "FILE_NOTICE":
+                        self.show_msg(f"[{msg['username']} uploaded file: {msg['filename']}]")
+                        # FIX 3.1: Removed file list insertion here, rely on FILE_LIST update
+                    elif msg["type"] == "FILE_LIST":
+                        # FIX 3.2: Clear all existing items in Treeview
+                        self.file_listbox.delete(*self.file_listbox.get_children())
+                        for f in msg["files"]:
+                            # FIX 3.3: Insert into Treeview with values
+                            self.file_listbox.insert("", "end", text=f["filename"], values=(f["filesize"],))
+                    elif msg["type"] == "FILE_SEND":
+                        filename = msg["filename"]
+                        filesize = int(msg["filesize"])
+                        
+                        self.show_msg(f"[Receiving file: {filename} ({filesize} bytes)...]")
+                        
+                        # FIX: Use recv_all to guarantee all bytes are read before moving on
+                        file_data = recv_all(self.client, filesize)
+                        with open(DOWNLOAD_DIR + filename, "wb") as f:
+                            f.write(file_data)
+                        
+                        self.show_msg(f"[Downloaded file: {filename}]")
+                    elif msg["type"] == "ERROR":
+                        self.show_msg("[Error: " + msg.get("message","") + "]")
+            except Exception as e:
+                # ... (rest of recv_loop)
+                print("Error in recv loop:", e)
+                self.destroy()
 
     # =========================
     # Close handler
@@ -257,18 +238,10 @@ class MyApp(tk.Tk):
         except:
             pass
         self.running = False
-        self.destroy()
+        self.destroy()    
 
-
-# =========================
-# Run App
-# =========================
 if __name__ == "__main__":
-    if Image is None or ImageTk is None:
-        import sys
-        print("Pillow is required for icons. Installing...")
-        os.system(f"{sys.executable} -m pip install pillow")
-        from PIL import Image, ImageTk
+    setup_download_directory(DOWNLOAD_DIR)
     username = input("What's your name? ").strip() or "User"
-    app = MyApp(host="127.0.0.1", port=5000, username=username)
+    app = App(theme_name="superhero", host="127.0.0.1", port=5000, username=username)
     app.mainloop()
