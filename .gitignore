@@ -2,4 +2,4 @@
 .venv/
 downloaded/
 server_files/
-
+__pycache__/
