@@ -6,7 +6,7 @@ import threading # اضافه کردن کتابخانه threading
 
 REFRESH_MS = 2000
 
-class ServerAdminGUI:
+class ServerAdminGUI(tb):
     def __init__(self, root, server: ChatServer):
         self.root = root
         self.server = server

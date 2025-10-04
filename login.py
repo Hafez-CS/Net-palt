@@ -26,6 +26,11 @@ def admin_start(username):
 def user_start(username):
     interface.main(username)
 
+def show_chatroom(parent, username, role):
+    if role == "user":
+        parent.withdraw()
+        app= interface.App(parent=parent, theme_name="superhero", host="127.0.0.1", port=5000, username=username)
+        app.mainloop()
 
 class Login(Window):
     def __init__(self, themename):
@@ -82,42 +87,25 @@ class Login(Window):
             if exist:
                 Messagebox.ok(message=f"Login successful!, role: {role}", title="Success",alert=True)
                 login_successful = True
-                # self.quit()
-                self.logged_in_username = username 
-                
-                # Destroy the window, which exits mainloop
-                self.destroy()
-
-
+                show_chatroom(self, username, role)
                 
             else:
                 Messagebox.ok(message="Invalid username or password.", title="Error",alert=True)
                 return
-
-        else:
-            
-            
+        else:            
             Messagebox.ok(message="Please enter both username and password.", title="Error",alert=True)
             return
 
 
 
-def main():
+if __name__ == "__main__":
+    
     login = Login(themename="superhero")
-
-    app = interface.main(username="sadra")
-    # app.mainloop()
-    # login.mainloop()
-
-    if login.logged_in_username:
-        return login.logged_in_username
-    else:
-        # Handle case where mainloop exits without successful login (e.g., window closed manually)
-        return None 
+    login.mainloop()
 
 
 
-main()
+
     # print(role)
     # if role == "admin":
     #     print(role)

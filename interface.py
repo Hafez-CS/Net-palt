@@ -9,7 +9,10 @@ import socket
 import json
 import os 
 
+
 DOWNLOAD_DIR = "downloaded/"
+
+
 def setup_download_directory(directory_name):
     if not os.path.exists(directory_name):
         print(f"[CLIENT] Download directory '{directory_name}' not found. Creating it now.")
@@ -43,10 +46,12 @@ def recv_control(sock):
 
 
 
-class App(Window):
-    def __init__(self, theme_name, username= "User", host="127.0.0.1", port=5000):
+class App(tb.Toplevel):
+    def __init__(self, parent, theme_name, username= "User", host="127.0.0.1", port=5000):
         self.theme_name = theme_name
-        super().__init__(themename=theme_name)
+        super().__init__()
+        self.parent = parent
+
         self.title("Messenger")
         self.geometry("600x700")
 
@@ -240,12 +245,13 @@ class App(Window):
         self.running = False
         self.destroy()    
 
-def main(username="user"):
-    setup_download_directory(DOWNLOAD_DIR)
-    app = App(theme_name="superhero", host="127.0.0.1", port=5000, username=username)
-    return app
-    # app.mainloop()
+
 
 if __name__ == "__main__":
-    username = input("What's your name? ").strip() or "User"
-    main(username)
+    setup_download_directory(DOWNLOAD_DIR)
+    # app = App(theme_name="superhero", host="127.0.0.1", port=5000, username=username)
+    login = Login(themename="superhero")
+    # app = App(theme_name="superhero", host="127.0.0.1", port=5000)
+    # app.withdraw()  # Start with main app hidden   
+
+    login.mainloop()
