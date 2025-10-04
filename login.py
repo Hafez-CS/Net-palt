@@ -3,7 +3,6 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from ttkbootstrap.window import Window
 from ttkbootstrap.dialogs import Messagebox
-from ttkbootstrap.scrolled import ScrolledText
 
 import server_interface
 import interface
@@ -20,11 +19,7 @@ def check_credentials(username, password):
             
         return False, None, None
 
-def admin_start(username):
-    server_interface.main()
 
-def user_start(username):
-    interface.main(username)
 
 def show_chatroom(parent, username, role):
     if role == "user":

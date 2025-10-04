@@ -249,9 +249,3 @@ class App(tb.Toplevel):
 
 if __name__ == "__main__":
     setup_download_directory(DOWNLOAD_DIR)
-    # app = App(theme_name="superhero", host="127.0.0.1", port=5000, username=username)
-    login = Login(themename="superhero")
-    # app = App(theme_name="superhero", host="127.0.0.1", port=5000)
-    # app.withdraw()  # Start with main app hidden   
-
-    login.mainloop()
