@@ -1,138 +1,142 @@
 # server_interface.py
 import tkinter as tk
-from tkinter import ttk, messagebox
-from server import ChatServer
-import threading # اضافه کردن کتابخانه threading
+from tkinter import ttk, messagebox, simpledialog
+from server import ChatServer, list_users_db, add_user_db, remove_user_db, create_group_db, list_groups_db
+import threading
 
-REFRESH_MS = 2000
+REFRESH_MS = 1500
 
 class ServerAdminGUI():
     def __init__(self, root, server: ChatServer):
         self.root = root
         self.server = server
-
         root.title("Server Admin Panel")
-        root.geometry("700x500")
+        root.geometry("900x600")
 
-        # یک متغیر برای نگهداری نام کاربری انتخاب شده
-        self.selected_username = None
+        # Left: users & actions
+        left = ttk.Frame(root); left.pack(side="left", fill="y", padx=10, pady=10)
+        ttk.Label(left, text="Users (DB)").pack()
+        self.users_box = tk.Listbox(left, width=30, height=20)
+        self.users_box.pack()
+        ttk.Button(left, text="Refresh", command=self.refresh_users).pack(pady=5)
+        ttk.Button(left, text="Add User", command=self.add_user).pack(fill="x")
+        ttk.Button(left, text="Remove User", command=self.remove_user).pack(fill="x")
+        ttk.Button(left, text="Kick Selected", command=self.kick_selected).pack(fill="x", pady=(5,0))
 
-        # لیست کاربران
-        ttk.Label(root, text="Connected Users").pack(anchor=tk.W)
-        self.users_list = tk.Listbox(root, height=10)
-        self.users_list.pack(fill=tk.X, padx=5, pady=5)
-        # اضافه کردن رویداد به Listbox برای تشخیص انتخاب کاربر
-        self.users_list.bind('<<ListboxSelect>>', self.on_user_select)
+        # Middle: groups
+        mid = ttk.Frame(root); mid.pack(side="left", fill="y", padx=10, pady=10)
+        ttk.Label(mid, text="Groups").pack()
+        self.groups_box = tk.Listbox(mid, width=30, height=10)
+        self.groups_box.pack()
+        ttk.Button(mid, text="Create Group", command=self.create_group).pack(pady=5)
+        ttk.Button(mid, text="Refresh Groups", command=self.refresh_groups).pack()
 
-        btn_frame = ttk.Frame(root)
-        btn_frame.pack()
-        # تغییر: فراخوانی متد جدید برای اجرای کیک در نخ جداگانه
-        ttk.Button(btn_frame, text="Kick", command=self.start_kick_thread).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Refresh", command=self.refresh_users).pack(side=tk.LEFT)
+        ttk.Label(mid, text="Assign user to selected group:").pack(pady=(10,0))
+        self.assign_user_entry = ttk.Entry(mid)
+        self.assign_user_entry.pack()
+        ttk.Button(mid, text="Assign", command=self.assign_user).pack(pady=5)
 
-        # Broadcast
-        ttk.Label(root, text="Broadcast Message").pack(anchor=tk.W, padx=5)
-        self.msg_entry = ttk.Entry(root, width=50)
-        self.msg_entry.pack(padx=5, pady=3)
-        ttk.Button(root, text="Send", command=self.broadcast).pack()
+        # Right: connected clients and tasks
+        right = ttk.Frame(root); right.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        ttk.Label(right, text="Connected Clients (live)").pack()
+        self.clients_box = tk.Listbox(right, width=40, height=10)
+        self.clients_box.pack(fill="x")
+        ttk.Button(right, text="Refresh Clients", command=self.refresh_clients).pack(pady=5)
 
-        # کنترل سرور
-        ctrl_frame = ttk.Frame(root)
-        ctrl_frame.pack(pady=10)
-        ttk.Button(ctrl_frame, text="Stop Server", command=self.stop_server).pack(side=tk.LEFT, padx=5)
-        ttk.Button(ctrl_frame, text="Start Server", command=self.start_server).pack(side=tk.LEFT, padx=5)
+        ttk.Label(right, text="Send Task to user").pack(pady=(10,0))
+        self.task_to = ttk.Entry(right); self.task_to.pack(fill="x")
+        self.task_title = ttk.Entry(right); self.task_title.pack(fill="x", pady=2)
+        self.task_body = tk.Text(right, height=6); self.task_body.pack(fill="both", pady=5)
+        ttk.Button(right, text="Send Task", command=self.send_task).pack()
+
+        # status
+        self.status_label = ttk.Label(root, text="Status: idle")
+        self.status_label.pack(side="bottom", fill="x")
 
         self.refresh_users()
+        self.refresh_groups()
         self._periodic()
 
-    def on_user_select(self, event):
-        """Called when a user is selected in the listbox"""
-        sel = self.users_list.curselection()
-        if sel:
-            disp = self.users_list.get(sel[0])
-            self.selected_username = self.map_display.get(disp)
-            print(f"Selected: {self.selected_username}")
-
-    def start_kick_thread(self):
-        """Starts a new thread to kick the selected user to avoid blocking the UI."""
-        if not getattr(self,"selected_username",None):
-            messagebox.showwarning("warning","هیچ کاربری انتخاب نشده است.")
-            return
-        threading.Thread(target=self._kick_worker,daemon=True).start()
-
-
-    def _kick_worker(self):
-        username = self.selected_username
-        try:
-            self.server.kick_by_username(username)
-        except Exception as e:
-            print("Kick Error:", e)
-        finally:
-
-            try:
-                self.root.after(0,self.refresh_users)
-
-            except Exception:
-                pass            
-            
-        
-    def _perform_kick(self):
-        """Actual kick logic that runs in the new thread."""
-        try:
-            self.server.kick_by_username(self.selected_username)
-            # بعد از اتمام عملیات، به نخ اصلی میگیم که رابط کاربری رو به‌روزرسانی کنه
-            self.root.after(100, self.refresh_users)
-        except Exception as e:
-            print(f"[ERROR] Could not kick user: {e}")
-        finally:
-            self.selected_username = None  # ریست کردن انتخاب
+    def _periodic(self):
+        self.refresh_clients()
+        self.root.after(REFRESH_MS, self._periodic)
 
     def refresh_users(self):
-        # بررسی می‌کنیم که سرور در حال اجرا هست یا نه
-        if not self.server.running:
+        self.users_box.delete(0, tk.END)
+        for u in list_users_db():
+            self.users_box.insert(tk.END, f"{u['username']} ({u['role']})")
+
+    def refresh_groups(self):
+        self.groups_box.delete(0, tk.END)
+        for g in list_groups_db():
+            self.groups_box.insert(tk.END, f"{g['id']} - {g['name']}")
+
+    def refresh_clients(self):
+        self.clients_box.delete(0, tk.END)
+        for c in self.server.list_clients():
+            self.clients_box.insert(tk.END, f"{c['username']} @ {c['addr']}")
+
+    def add_user(self):
+        u = simpledialog.askstring("New user", "Username:", parent=self.root)
+        if not u: return
+        p = simpledialog.askstring("New user", "Password:", parent=self.root, show="*")
+        if p is None: return
+        role = simpledialog.askstring("Role", "Role (admin/user):", parent=self.root) or "user"
+        add_user_db(u,p,role)
+        messagebox.showinfo("Added", f"User {u} added with role {role}")
+        self.refresh_users()
+
+    def remove_user(self):
+        sel = self.users_box.curselection()
+        if not sel:
+            messagebox.showwarning("Select", "Select a user")
             return
-            
-        try:
-            self.users_list.delete(0, tk.END)
-            clients = self.server.list_clients()
-            self.map_display = {}
-            for c in clients:
-                # نمایش نام کاربری و آدرس
-                display = f"{c['username']} ({c['addr']})"
-                self.users_list.insert(tk.END, display)
-                # ذخیره نام کاربری به جای fileno
-                self.map_display[display] = c["username"]
-        except Exception as e:
-            # در صورت بروز خطا، آن را چاپ می‌کنیم و از کرش جلوگیری می‌کنیم
-            print(f"[GUI ERROR] Could not refresh user list: {e}")
-            self.users_list.delete(0, tk.END)
-            self.users_list.insert(tk.END, "Server is not running or an error occurred.")
+        display = self.users_box.get(sel[0])
+        username = display.split()[0]
+        remove_user_db(username)
+        # also remove active connection
+        threading.Thread(target=self.server.remove_user, args=(username,), daemon=True).start()
+        self.refresh_users()
+
+    def create_group(self):
+        name = simpledialog.askstring("Group name", "Enter group name:", parent=self.root)
+        if not name: return
+        create_group_db(name)
+        self.refresh_groups()
+
+    def assign_user(self):
+        sel = self.groups_box.curselection()
+        if not sel:
+            messagebox.showwarning("Select group", "Select a group first")
+            return
+        group_display = self.groups_box.get(sel[0])
+        gid = int(group_display.split(" - ")[0])
+        username = self.assign_user_entry.get().strip()
+        if username == "":
+            messagebox.showwarning("Input", "Enter username")
+            return
+        add_user_to_group_db(gid, username)
+        messagebox.showinfo("Assigned", f"{username} added to group id {gid}")
 
     def kick_selected(self):
-        # این متد دیگر مورد استفاده نیست
-        pass
+        sel = self.clients_box.curselection()
+        if not sel:
+            messagebox.showwarning("Select", "Select a connected client")
+            return
+        display = self.clients_box.get(sel[0])
+        username = display.split()[0]
+        threading.Thread(target=self.server.kick_by_username, args=(username,), daemon=True).start()
+        self.refresh_clients()
 
-    def broadcast(self):
-        txt = self.msg_entry.get().strip()
-        if txt:
-            self.server.broadcast_admin(txt)
-            self.msg_entry.delete(0, tk.END)
-
-    def stop_server(self):
-        self.server.safe_shutdown()
-        messagebox.showinfo("Stopped", "Server stopped")
-
-    def start_server(self):
-        if not self.server.running:
-            self.server.start_background()
-            messagebox.showinfo("Started", "Server started")
-
-    def _periodic(self):
-        # این تابع همیشه اجرا می‌شه
-        # اما تنها در صورتی refresh_users رو صدا می‌زنه که سرور در حال اجرا باشه
-        if self.server.running:
-            self.refresh_users()
-        self.root.after(REFRESH_MS, self._periodic)
+    def send_task(self):
+        to = self.task_to.get().strip()
+        title = self.task_title.get().strip()
+        body = self.task_body.get("1.0", tk.END).strip()
+        if not to or not title:
+            messagebox.showwarning("Input", "Specify to and title")
+            return
+        self.server.send_task(to, "ADMIN", title, body)
+        messagebox.showinfo("Sent", f"Task sent to {to}")
 
 def main():
     srv = ChatServer()

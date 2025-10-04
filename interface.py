@@ -1,13 +1,8 @@
+# client_app.py
 import tkinter as tk
-from tkinter import PhotoImage, filedialog
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
-from ttkbootstrap.window import Window
-from ttkbootstrap.scrolled import ScrolledText
-import threading
-import socket
-import json
-import os 
+from tkinter import simpledialog, messagebox, scrolledtext, filedialog
+import socket, threading, json, os
+from typing import Optional
 
 
 DOWNLOAD_DIR = "downloaded/"
@@ -17,28 +12,21 @@ def setup_download_directory(directory_name):
     if not os.path.exists(directory_name):
         print(f"[CLIENT] Download directory '{directory_name}' not found. Creating it now.")
 
-        os.makedirs(directory_name, exist_ok=True)
-    else:
-        print(f"[CLIENT] Download directory '{directory_name}' found.")
- 
 def send_control(sock, data: dict):
-    """Send a JSON control message with a fixed header length"""
     j = json.dumps(data).encode('utf-8')
     header = f"{len(j):010d}".encode('utf-8')
     sock.sendall(header + j)
 
 def recv_all(sock, n):
-    """Receive exactly n bytes"""
     buf = bytearray()
-    while len(buf) < n:
-        chunk = sock.recv(n - len(buf))
+    while len(buf)<n:
+        chunk = sock.recv(n-len(buf))
         if not chunk:
-            raise ConnectionError("Connection closed")
+            raise ConnectionError("closed")
         buf.extend(chunk)
     return bytes(buf)
 
 def recv_control(sock):
-    """Receive a JSON control message"""
     header = recv_all(sock, 10)
     length = int(header.decode('utf-8'))
     j = recv_all(sock, length)
@@ -137,106 +125,68 @@ class App(tb.Toplevel):
         self.running = True
         threading.Thread(target=self.recv_loop, daemon=True).start()
 
-        # On close
-        self.protocol("WM_DELETE_WINDOW", self.on_close)
+    def do_login(self):
+        dlg = LoginDialog(self, title="Login")
+        if not dlg.result: return False
+        username,password = dlg.result
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((self.host, self.port))
+            send_control(sock, {"type":"HELLO","username":username,"password":password})
+            resp = recv_control(sock)
+            if resp.get("type")=="ERROR":
+                messagebox.showerror("Login failed", resp.get("message",""))
+                sock.close(); return self.do_login()  # allow retry
+            if resp.get("type")=="WELCOME":
+                self.sock = sock; self.username=resp.get("username"); self.role=resp.get("role")
+                # server may send other initial messages; handle them later in recv_loop
+                return True
+        except Exception as e:
+            messagebox.showerror("Connection error", str(e)); return False
 
-    def proccess_msg(self, event=None):
-        text = self.message_entry.get().strip()
-        if not text:
-            return
-        send_control(self.client, {"type": "MSG", "text": text})
-        self.entry_var.set("")
+    def build_ui(self):
+        self.text = scrolledtext.ScrolledText(self, state="disabled", height=20)
+        self.text.pack(fill="both", expand=True)
+        frm = tk.Frame(self); frm.pack(fill="x")
+        self.entry = tk.Entry(frm); self.entry.pack(side="left", fill="x", expand=True)
+        self.entry.bind("<Return>", lambda e:self.send_msg())
+        tk.Button(frm, text="Send", command=self.send_msg).pack(side="left")
+        tk.Button(frm, text="File", command=self.send_file).pack(side="left")
+        self.files_list = tk.Listbox(self, height=6)
+        self.files_list.pack(fill="x")
+        tk.Button(self, text="Download", command=self.download_selected).pack()
+        tk.Button(self, text="Show tasks", command=self.request_tasks).pack()
 
-    def show_msg(self, msg):
-        self.text_area.text.config(state="normal")
-        self.text_area.insert(tk.END, msg + "\n")
-        self.text_area.see(tk.END)
-        self.text_area.text.config(state="disabled")
+    def send_msg(self):
+        t = self.entry.get().strip()
+        if not t: return
+        send_control(self.sock, {"type":"MSG","text":t})
+        self.entry.delete(0, "end")
 
-
-    # =========================
-    # File functions
-    # =========================
     def send_file(self):
-        filepath = filedialog.askopenfilename(title="Choose file")
-        if not filepath:
-            return
-        filesize = os.path.getsize(filepath)
-        filename = os.path.basename(filepath)
+        path = filedialog.askopenfilename()
+        if not path: return
+        fname = os.path.basename(path); fsize = os.path.getsize(path)
+        send_control(self.sock, {"type":"FILE_META","filename":fname,"filesize":fsize})
+        with open(path,"rb") as f:
+            while chunk:=f.read(4096):
+                self.sock.sendall(chunk)
+        self.append_text(f"[You uploaded {fname}]")
 
-        # Send metadata first
-        send_control(self.client, {"type": "FILE_META", "filename": filename, "filesize": filesize})
+    def download_selected(self):
+        sel = self.files_list.curselection()
+        if not sel: return
+        fname = self.files_list.get(sel[0])
+        send_control(self.sock, {"type":"GET_FILE","filename":fname})
 
-        # Send file data
-        with open(filepath, "rb") as f:
-            while chunk := f.read(4096):
-                self.client.sendall(chunk)
+    def append_text(self, s):
+        self.text.config(state="normal"); self.text.insert("end", s+"\n"); self.text.see("end"); self.text.config(state="disabled")
 
-        self.show_msg(f"[You uploaded file: {filename}]")
+    def request_tasks(self):
+        # server already sent tasks at login; can implement refresh command if needed
+        send_control(self.sock, {"type":"REQUEST_TASKS"})
 
-    def download_file(self):
-        # FIX 2: Use Treeview selection logic
-        selection = self.file_listbox.selection()
-        if not selection:
-            return
-        
-        # Get the filename from the Treeview item's text field (heading #0)
-        selected_item_id = selection[0]
-        filename = self.file_listbox.item(selected_item_id, 'text')
-
-        # filename will be an empty string if it's the root item or somehow invalid, check again
-        if not filename:
-            return
-
-        send_control(self.client, {"type": "GET_FILE", "filename": filename})
-        self.show_msg(f"[Requesting file: {filename}]")
-
-    # =========================
-    # Receiving loop
-    # =========================
     def recv_loop(self):
-            try:
-                while self.running:
-                    msg = recv_control(self.client)
-
-                    if msg["type"] == "MSG":
-                        self.show_msg(f"{msg['username']}: {msg['text']}")
-                    elif msg["type"] == "USER_JOIN":
-                        self.show_msg(f"[{msg['username']} joined]")
-                    elif msg["type"] == "USER_LEFT":
-                        self.show_msg(f"[{msg['username']} left]")
-                    elif msg["type"] == "FILE_NOTICE":
-                        self.show_msg(f"[{msg['username']} uploaded file: {msg['filename']}]")
-                        # FIX 3.1: Removed file list insertion here, rely on FILE_LIST update
-                    elif msg["type"] == "FILE_LIST":
-                        # FIX 3.2: Clear all existing items in Treeview
-                        self.file_listbox.delete(*self.file_listbox.get_children())
-                        for f in msg["files"]:
-                            # FIX 3.3: Insert into Treeview with values
-                            self.file_listbox.insert("", "end", text=f["filename"], values=(f["filesize"],))
-                    elif msg["type"] == "FILE_SEND":
-                        filename = msg["filename"]
-                        filesize = int(msg["filesize"])
-                        
-                        self.show_msg(f"[Receiving file: {filename} ({filesize} bytes)...]")
-                        
-                        # FIX: Use recv_all to guarantee all bytes are read before moving on
-                        file_data = recv_all(self.client, filesize)
-                        with open(DOWNLOAD_DIR + filename, "wb") as f:
-                            f.write(file_data)
-                        
-                        self.show_msg(f"[Downloaded file: {filename}]")
-                    elif msg["type"] == "ERROR":
-                        self.show_msg("[Error: " + msg.get("message","") + "]")
-            except Exception as e:
-                # ... (rest of recv_loop)
-                print("Error in recv loop:", e)
-                self.destroy()
-
-    # =========================
-    # Close handler
-    # =========================
-    def on_close(self):
         try:
             send_control(self.client, {"type": "QUIT"})
             self.client.close()
