@@ -6,7 +6,7 @@ from ttkbootstrap.dialogs import Messagebox
 
 import server_interface
 import interface
-
+from server import ChatServer
 
 def check_credentials(username, password):
     global role
@@ -25,6 +25,12 @@ def show_chatroom(parent, username, role):
     if role == "user":
         parent.withdraw()
         app= interface.App(parent=parent, theme_name="superhero", host="127.0.0.1", port=5000, username=username)
+        app.mainloop()
+    elif role == "admin":
+        parent.withdraw()
+        srv= ChatServer()
+        srv.start_background()
+        app = server_interface.ServerAdminGUI( srv, host="127.0.0.1", port=5000)
         app.mainloop()
 
 class Login(Window):

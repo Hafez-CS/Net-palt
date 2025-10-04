@@ -249,3 +249,6 @@ class App(tb.Toplevel):
 
 if __name__ == "__main__":
     setup_download_directory(DOWNLOAD_DIR)
+    username = input("Enter your username: ").strip()
+    app= App(parent=None, theme_name="superhero", host="127.0.0.1", port=5000, username=username)
+    app.mainloop()
