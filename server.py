@@ -2,7 +2,7 @@ import socket
 import threading
 import json
 import os
-
+import models
 # =========================
 # Utility functions for JSON protocol
 # =========================
@@ -43,6 +43,7 @@ class ChatServer:
         os.makedirs(self.files_dir, exist_ok=True)
         self.running = False
 
+        models.init_db()
     def start(self):
         print(f"[SERVER] Starting on {self.host}:{self.port}")
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -134,6 +135,8 @@ class ChatServer:
             self.remove_client(sock)
             print(f"[SERVER] Kicked user {username}")
 
+    def add_user(self, username, password, role="user"):
+        models.add_user_db(username,password,role)
 
     def broadcast_admin(self, text):
         """Broadcast admin message to all clients"""

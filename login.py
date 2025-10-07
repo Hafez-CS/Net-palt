@@ -3,22 +3,30 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from ttkbootstrap.window import Window
 from ttkbootstrap.dialogs import Messagebox
-
 import server_interface
 import interface
+import sqlite3, bcrypt
 from server import ChatServer
 
-def check_credentials(username, password):
-    global role
-    with open ("users.csv", "r") as f:
-        lines = f.readlines()
-        for line in lines[1:]:  # Skip header
-            stored_username, stored_password, role = line.strip().split(",")
-            if username == stored_username and password == stored_password:
-                return True, username, role
-            
-        return False, None, None
+DB_FILE = "chat_app.db"
 
+def autenticate_user(username, password):
+
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cur = conn.cursor()
+        cur.execute("SELECT password_hash, role FROM users WHERE username = ?", (username,))
+        res = cur.fetchone()
+        if res:
+            stored_password_hash, role = res
+            if bcrypt.checkpw(password.encode('utf-8'), stored_password_hash.encode('utf-8')):
+                return True, username, role
+        return False, None, None
+    except Exception as e:
+        print("Error during authentication:", e)
+        return False, None, None
+    finally:
+        conn.close()
 
 
 def show_chatroom(parent, username, role):
@@ -84,7 +92,7 @@ class Login(Window):
                 return
             
             print(f"Username: {username}, Password: {password}")
-            exist, username, role = check_credentials(username, password)
+            exist, username, role = autenticate_user(username, password)
             if exist:
                 Messagebox.ok(message=f"Login successful!, role: {role}", title="Success",alert=True)
                 login_successful = True

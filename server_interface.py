@@ -5,10 +5,18 @@ import ttkbootstrap as ttk
 from ttkbootstrap.window import Window
 from ttkbootstrap.constants import * 
 from server import ChatServer
-import threading
-import json
-import socket
+import threading, json, socket, bcrypt
+import models
+
 REFRESH_MS = 2000
+
+def hash_password(password):
+
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password_bytes, salt)
+    return hashed_password.decode('utf-8')
+
 
 def recv_all(sock, n):
     """Receive exactly n bytes"""
@@ -39,6 +47,9 @@ class ServerAdminGUI(ttk.Toplevel):
         self.server = server
         self.host = host
         self.port = port
+        win_height = Window.winfo_screenheight(self)
+        win_width = Window.winfo_screenwidth(self)        
+        self.geometry(f"{win_width//2}x{int(win_height//1.2)}+{win_width//2 -(win_width//2)//2}+{win_height//2 - int(win_height//1.2)//2}")
 
         self.title("Server Admin Panel - ttkbootstrap (Superhero)")
         # حذف تنظیمات هندسی ثابت برای انعطاف‌پذیری بیشتر، یا می‌توانید آن را نگه دارید.
@@ -92,6 +103,8 @@ class ServerAdminGUI(ttk.Toplevel):
         # استفاده از bootstyle برای دکمه Kick
         ttk.Button(user_btn_frame, text="Kick", command=self.start_kick_thread, bootstyle="danger").pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(user_btn_frame, text="Refresh", command=self.refresh_users, bootstyle="info-outline").pack(side=tk.LEFT)
+        ttk.Button(user_btn_frame, text="Add User", command=self.add_user, bootstyle="success-outline").pack(side=tk.LEFT, padx=5)
+        ttk.Button(user_btn_frame, text="remove User", command=self.remove_user, bootstyle="danger-outline").pack(side=tk.LEFT, padx=(0,5))
 
         # ---------------------------------------------
         # Chat History Section
@@ -152,6 +165,11 @@ class ServerAdminGUI(ttk.Toplevel):
         rec_message = threading.Thread(target=self.recv_loop, daemon=True)
         rec_message.start()
 
+    def add_user(self):
+        new_user = AddUser(self)
+        new_user.mainloop()
+    def remove_user(self):
+        pass
     def on_user_select(self, event):
         """Called when a user is selected in the listbox"""
         sel = self.users_list.curselection()
@@ -285,6 +303,53 @@ class ServerAdminGUI(ttk.Toplevel):
             self.destroy()
 
 
+class AddUser(ttk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Add New User")
+        win_height = Window.winfo_screenheight(self)
+        win_width = Window.winfo_screenwidth(self)
+        print(win_height, win_width)
+        self.geometry(f"{win_width//5}x{win_height//3}+{win_width//2 -(win_width//5)//2}+{win_height//2 - (win_height//3)//2}")
+        self.resizable(False, False)
+
+        ttk.Label(self, text="Username:").pack(pady=(20, 5))
+        self.username_entry = ttk.Entry(self)
+        self.username_entry.pack(pady=5)
+
+        ttk.Label(self, text="Password:").pack(pady=5)
+        self.password_entry = ttk.Entry(self, show="*")
+        self.password_entry.pack(pady=5)
+
+        ttk.Label(self, text="Role:").pack(pady=5)
+        role_options = ["admin", "user"]
+        role_var = ttk.StringVar(value=role_options[1])
+        self.role_button = ttk.Combobox(self, text="user", textvariable=role_var, values=role_options, state="readonly")
+        self.role_button.pack(pady=5)
+ # Default role
+
+        ttk.Button(self, text="Add User", command=self.add_user).pack(pady=20)
+
+    def add_user(self):
+        username = self.username_entry.get().strip()
+        password = self.password_entry.get().strip()
+        if not self.role_button.get():
+            messagebox.showwarning("Input Error", "Please select a role.")
+            return
+        role = self.role_button.get()
+        
+        if not username or not password:
+            messagebox.showwarning("Input Error", "Username and Password cannot be empty.")
+            return
+        
+        #add to db
+        password = hash_password(password)
+        models.add_user_db(username, password, role)
+
+        print(f"Adding user: {username} with role: {role}")
+        
+        messagebox.showinfo("Success", f"User {username} added with role {role}.")
+        self.destroy()
 
 if __name__ == "__main__":
     srv = ChatServer()
