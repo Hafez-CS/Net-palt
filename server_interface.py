@@ -398,3 +398,5 @@ class AddUser(ttk.Toplevel):
             self.destroy()
         else:
             messagebox.showerror("Error", f"User {username} already exists or failed to add.")
+
+
