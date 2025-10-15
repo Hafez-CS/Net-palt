@@ -1,36 +1,40 @@
+# login.py
 import tkinter as tk
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from ttkbootstrap.window import Window
 from ttkbootstrap.dialogs import Messagebox
-
 import server_interface
 import interface
+import sqlite3, bcrypt
 from server import ChatServer
+import models 
 
-def check_credentials(username, password):
-    global role
-    with open ("users.csv", "r") as f:
-        lines = f.readlines()
-        for line in lines[1:]:  # Skip header
-            stored_username, stored_password, role = line.strip().split(",")
-            if username == stored_username and password == stored_password:
-                return True, username, role
-            
-        return False, None, None
+# --- [تعریف نام تم] ---
+THEME_NAME = "superhero" 
+# -----------------------
 
+def autenticate_user(username, password):
+    user_data = models.get_user_by_username(username)
+    if user_data:
+        _, stored_password_hash, role = user_data
+        if models.check_password_hash(password, stored_password_hash): 
+            return True, username, role
+    return False, None, None
 
 
 def show_chatroom(parent, username, role):
     if role == "user":
         parent.withdraw()
-        app= interface.App(parent=parent, theme_name="superhero", host="127.0.0.1", port=5000, username=username)
+        app = interface.App(parent=parent, theme_name=THEME_NAME, host="127.0.0.1", port=5000, username=username)
         app.mainloop()
     elif role == "admin":
         parent.withdraw()
-        srv= ChatServer()
-        srv.start_background()
-        app = server_interface.ServerAdminGUI( srv, host="127.0.0.1", port=5000)
+        srv = ChatServer()
+        if not srv.running:
+             srv.start_background()
+        
+        app = server_interface.ServerAdminGUI(srv, host="127.0.0.1", port=5000, theme_name=THEME_NAME)
         app.mainloop()
 
 class Login(Window):
@@ -67,52 +71,38 @@ class Login(Window):
 
         self.password_input = tb.Entry(self.login, width=25, bootstyle="info", show="*",)
         self.password_input.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+        
+        self.password_input.bind('<Return>', lambda e: self.login_user()) 
 
         # Login Button
         self.login_button = tb.Button(self.login, text="Login", bootstyle="success", command=self.login_user)
         self.login_button.grid(row=3, column=0, columnspan=2, pady=25, sticky="ew")
 
 
-    def login_user(self, ):
+    def login_user(self, event=None): 
 
         username = self.username_input.get()
         password = self.password_input.get()
         if username and password:
 
-            if 1 <len(password) < 8:
-                Messagebox.ok(message="Password must be at least 8 characters long.", title="Error",alert=True)           
+            if len(password) < 4: 
+                Messagebox.ok(message="Password must be at least 4 characters long.", title="Error",alert=True)
                 return
             
-            print(f"Username: {username}, Password: {password}")
-            exist, username, role = check_credentials(username, password)
+            exist, username, role = autenticate_user(username, password)
             if exist:
-                Messagebox.ok(message=f"Login successful!, role: {role}", title="Success",alert=True)
-                login_successful = True
+                Messagebox.ok(message=f"Login successful! Role: {role}", title="Success",alert=True)
                 show_chatroom(self, username, role)
                 
             else:
                 Messagebox.ok(message="Invalid username or password.", title="Error",alert=True)
                 return
-        else:            
+        else: 
             Messagebox.ok(message="Please enter both username and password.", title="Error",alert=True)
             return
 
 
-
 if __name__ == "__main__":
-    
-    login = Login(themename="superhero")
+    models.init_db() 
+    login = Login(themename=THEME_NAME)
     login.mainloop()
-
-
-
-
-    # print(role)
-    # if role == "admin":
-    #     print(role)
-    #     admin_start(username)
-                   
-    # elif role == "user":
-    #     print(role)
-
-    #     user_start(username)

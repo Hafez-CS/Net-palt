@@ -1,7 +1,10 @@
+# server.py
 import socket
 import threading
 import json
 import os
+import models 
+import time
 
 # =========================
 # Utility functions for JSON protocol
@@ -29,7 +32,6 @@ def recv_control(sock):
     j = recv_all(sock, length)
     return json.loads(j.decode('utf-8'))
 
-
 # =========================
 # Chat Server
 # =========================
@@ -37,211 +39,228 @@ class ChatServer:
     def __init__(self, host="0.0.0.0", port=5000):
         self.host = host
         self.port = port
-        self.clients = {}  # تغییر: username -> sock
+        self.clients = {}  # {username: sock}
         self.lock = threading.Lock()
         self.files_dir = "server_files"
         os.makedirs(self.files_dir, exist_ok=True)
         self.running = False
+        self.server_socket = None
+        self.server_thread = None
 
-    def start(self):
-        print(f"[SERVER] Starting on {self.host}:{self.port}")
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.bind((self.host, self.port))
-        server_socket.listen(10)
+        models.init_db()
+        self.available_files = self._get_file_list_from_dir() 
 
-        self.running = True
-        while self.running:
-            try:
-                client_socket, addr = server_socket.accept()
-            except OSError:
-                break
-            print(f"[SERVER] New connection from {addr}")
-            threading.Thread(target=self.handle_client, args=(client_socket,), daemon=True).start()
-
-    def broadcast(self, data, exclude=None):
-        """Send control message to all clients"""
-        with self.lock:
-            for client_sock in list(self.clients.values()):
-                if client_sock == exclude:
-                    continue
-                try:
-                    send_control(client_sock, data)
-                except:
-                    for username, sock in list(self.clients.items()):
-                        if sock == client_sock:
-                            self.remove_client(sock)
-                            break
-
-    def remove_client(self, sock):
-        """Helper to remove client safely without recursion issues"""
-        with self.lock:
-            username = None
-            for u, s in self.clients.items():
-                if s == sock:
-                    username = u
-                    break
-            
-            if username:
-                del self.clients[username]
-        if username:
-            self.broadcast({"type": "USER_LEFT", "username": username})
-            print(f"[SERVER] {username} disconnected")
-        try:
-            sock.close()
-        except:
-            pass
-
-    def disconnect(self, sock):
-        """Wrapper for compatibility"""
-        self.remove_client(sock)
-
-    # =========================
-    # متدهای اضافه برای GUI و مدیریت
-    # =========================
-    def start_background(self):
-        """Run server in background thread"""
-        t = threading.Thread(target=self.start, daemon=True)
-        t.start()
-
-    def list_clients(self):
-        """Return list of connected clients info"""
-        with self.lock:
-            result = []
-            for username, sock in self.clients.items():
-                try:
-                    addr = sock.getpeername()
-                except:
-                    addr = "?"
-                result.append({
-                    "username": username,
-                    "addr": addr
-                })
-            return result
-    
-    def kick_by_username(self, username: str):
-
-        sock = None
-        # فقط پیدا کردن کلاینت بدون lock
-        with self.lock:
-            sock = self.clients.get(username)
-
-        if sock:
-            try:
-                sock.close()
-            except Exception:
-                pass
-            # حذف از لیست با remove_client (خودش lock می‌گیره)
-            self.remove_client(sock)
-            print(f"[SERVER] Kicked user {username}")
-
-
-    def broadcast_admin(self, text):
-        """Broadcast admin message to all clients"""
-        self.broadcast({"type": "MSG", "username": "[ADMIN]", "text": text})
-
-    def safe_shutdown(self):
-        """Shutdown server gracefully"""
-        self.running = False
-        with self.lock:
-            for sock in list(self.clients.values()):
-                self.remove_client(sock)
-        print("[SERVER] Shutdown complete")
-
-    # =========================
-    # فایل‌ها و پیام‌های کلاینت
-    # =========================
-    def send_file_list(self, sock):
-        """Send the list of available files to one client"""
+    def _get_file_list_from_dir(self):
         files = []
-        for f in os.listdir(self.files_dir):
-            path = os.path.join(self.files_dir, f)
-            if os.path.isfile(path):
-                size = os.path.getsize(path)
-                files.append({"filename": f, "filesize": size})
-        send_control(sock, {"type": "FILE_LIST", "files": files})
+        for filename in os.listdir(self.files_dir):
+            filepath = os.path.join(self.files_dir, filename)
+            if os.path.isfile(filepath):
+                files.append({"filename": filename, "filesize": os.path.getsize(filepath)})
+        return files
+    
+    def get_all_users_with_status(self):
+        all_db_users = models.get_all_users_db() 
+        users_with_status = []
+        
+        with self.lock:
+            online_set = set(self.clients.keys()) 
+            
+            for username in all_db_users:
+                is_online = username in online_set
+                users_with_status.append({"username": username, "is_online": is_online})
+        
+        return users_with_status
 
-    def handle_client(self, sock):
+    # server.py (تابع kick_by_username)
+
+    def kick_by_username(self, username_to_kick):
+        with self.lock:
+            client_socket = self.clients.get(username_to_kick)
+            
+            if client_socket:
+                kicked_successfully = False
+                try:
+                    # 1. ارسال پیام کیک
+                    send_control(client_socket, {"type": "KICKED", "message": "You have been kicked by the admin."})
+                    
+                    # 2. قطع سوکت و بستن آن
+                    time.sleep(0.1) # یک مکث کوتاه برای اطمینان از ارسال پیام
+                    client_socket.shutdown(socket.SHUT_RDWR)
+                    client_socket.close()
+                    kicked_successfully = True
+
+                except Exception as e:
+                    # اگر در فرآیند ارسال پیام یا بستن سوکت خطا رخ دهد
+                    print(f"[SERVER ERROR] Error during socket closure for {username_to_kick}: {e}")
+                    
+                finally:
+                    # 3. حذف از لیست سرور (مهمترین قسمت برای رفع فریز)
+                    if username_to_kick in self.clients:
+                        del self.clients[username_to_kick]
+                        self.broadcast_message(f"[{username_to_kick} was kicked by admin]", "SERVER")
+                        print(f"[SERVER] Removed client {username_to_kick} from list.")
+                        return True
+        return False
+        
+    def broadcast_admin(self, message):
+        self.broadcast_message(message, "ADMIN")
+
+    def broadcast_message(self, message, sender):
+        """ارسال پیام به تمام کلاینت‌های متصل، شامل ادمین."""
+        msg = {"type": "MSG", "username": sender, "text": message}
+        j = json.dumps(msg).encode('utf-8')
+        header = f"{len(j):010d}".encode('utf-8')
+        
+        with self.lock:
+            for username, client_socket in list(self.clients.items()): 
+                # --- [تغییر کلیدی: شرط حذف شد تا ادمین هم پیام‌ها را ببیند] ---
+                try:
+                    client_socket.sendall(header + j)
+                except:
+                    self.remove_client(username, client_socket)
+                        
+    def broadcast_file_list(self):
+        self.available_files = self._get_file_list_from_dir()
+        file_msg = {"type": "FILE_LIST", "files": self.available_files}
+        
+        with self.lock:
+            for username, client_socket in list(self.clients.items()):
+                try:
+                    send_control(client_socket, file_msg)
+                except:
+                    self.remove_client(username, client_socket)
+
+    def handle_client(self, client_socket, address):
+        username = None
         try:
-            hello = recv_control(sock)
-            if hello["type"] != "HELLO":
-                send_control(sock, {"type": "ERROR", "message": "Must start with HELLO"})
-                sock.close()
+            hello_msg = recv_control(client_socket)
+            if hello_msg["type"] != "HELLO":
                 return
-
-            username = hello.get("username", "Guest")
+            
+            username = hello_msg["username"]
+            
             with self.lock:
                 if username in self.clients:
-                    send_control(sock, {"type": "ERROR", "message": "Username already taken"})
-                    sock.close()
+                    send_control(client_socket, {"type": "ERROR", "message": "Username already taken or connected."})
                     return
-                self.clients[username] = sock
+                self.clients[username] = client_socket
 
-            self.broadcast({"type": "USER_JOIN", "username": username}, exclude=sock)
-            self.send_file_list(sock)
-            print(f"[SERVER] {username} joined")
-
+            if username != "admin": 
+                self.broadcast_message(f"{username} joined", "SERVER")
+                send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
+            
             while True:
-                msg = recv_control(sock)
-
+                msg = recv_control(client_socket)
+                
                 if msg["type"] == "MSG":
-                    self.broadcast({"type": "MSG", "username": username, "text": msg["text"]})
-
+                    # اگر ادمین پیام فرستاده، نیاز به برودکست نیست، فقط برای نمایش در پنل ادمین
+                    if username == "admin": 
+                        continue
+                    self.broadcast_message(msg["text"], username)
+                
                 elif msg["type"] == "FILE_META":
+                    # ... (File Meta logic remains the same)
                     filename = msg["filename"]
                     filesize = int(msg["filesize"])
-                    path = os.path.join(self.files_dir, filename)
-
-                    with open(path, "wb") as f:
-                        remaining = filesize
-                        while remaining > 0:
-                            chunk = sock.recv(min(4096, remaining))
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                            remaining -= len(chunk)
-
-                    print(f"[SERVER] {username} uploaded {filename} ({filesize} bytes)")
-
-                    self.broadcast({"type": "FILE_NOTICE", "username": username, "filename": filename})
-                    self.broadcast({"type": "FILE_LIST", "files": [
-                        {"filename": f, "filesize": os.path.getsize(os.path.join(self.files_dir, f))}
-                        for f in os.listdir(self.files_dir)
-                        if os.path.isfile(os.path.join(self.files_dir, f))
-                    ]})
-
+                    filepath = os.path.join(self.files_dir, filename)
+                    
+                    file_data = recv_all(client_socket, filesize)
+                    with open(filepath, "wb") as f:
+                        f.write(file_data)
+                    
+                    self.broadcast_message(f"{username} uploaded file: {filename}", "SERVER")
+                    self.broadcast_file_list() 
+                    
                 elif msg["type"] == "GET_FILE":
+                    # ... (Get File logic remains the same)
                     filename = msg["filename"]
-                    path = os.path.join(self.files_dir, filename)
-                    if not os.path.exists(path):
-                        send_control(sock, {"type": "ERROR", "message": "File not found"})
-                        continue
-
-                    filesize = os.path.getsize(path)
-                    send_control(sock, {"type": "FILE_SEND", "filename": filename, "filesize": filesize})
-
-                    with open(path, "rb") as f:
-                        while chunk := f.read(4096):
-                            sock.sendall(chunk)
-
-                    print(f"[SERVER] Sent {filename} to {username}")
+                    filepath = os.path.join(self.files_dir, filename)
+                    
+                    if os.path.exists(filepath):
+                        filesize = os.path.getsize(filepath)
+                        send_control(client_socket, {"type": "FILE_SEND", "filename": filename, "filesize": filesize})
+                        with open(filepath, "rb") as f:
+                            while chunk := f.read(4096):
+                                client_socket.sendall(chunk)
+                    else:
+                        send_control(client_socket, {"type": "ERROR", "message": f"File {filename} not found on server."})
 
                 elif msg["type"] == "QUIT":
-                    self.remove_client(sock)
                     break
+        
+        except ConnectionError:
+            pass 
         except Exception as e:
-            print("[SERVER] Error:", e)
+            print(f"[SERVER ERROR] Error handling client {username}: {e}")
+            
         finally:
-            self.remove_client(sock)
+            if username:
+                self.remove_client(username, client_socket)
 
+    def remove_client(self, username, client_socket):
+        """Removes a client connection safely."""
+        with self.lock:
+            if username in self.clients and self.clients[username] == client_socket:
+                del self.clients[username]
+                if username != "admin":
+                    self.broadcast_message(f"{username} left", "SERVER")
+                try:
+                    client_socket.close()
+                except:
+                    pass
 
-# =========================
-# Run Server
-# =========================
-if __name__ == "__main__":
-    srv = ChatServer(host="0.0.0.0", port=5000)
-    srv.start_background()
-    try:
-        while True:
-            pass
-    except KeyboardInterrupt:
-        srv.safe_shutdown()
+    def start(self):
+        if self.running:
+            print("[SERVER] Server is already running.")
+            return
+
+        print(f"[SERVER] Starting on {self.host}:{self.port}")
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen()
+        self.running = True
+        
+        while self.running:
+            try:
+                client_socket, address = self.server_socket.accept()
+                threading.Thread(target=self.handle_client, args=(client_socket, address), daemon=True).start()
+            except socket.timeout:
+                continue
+            except Exception as e:
+                if self.running:
+                    print(f"[SERVER ERROR] Accept failed: {e}")
+                break
+
+        print("[SERVER] Shut down.")
+
+    def start_background(self):
+        if not self.running:
+            self.server_thread = threading.Thread(target=self.start, daemon=True)
+            self.server_thread.start()
+            print("[SERVER] Server started in background thread.")
+
+    def safe_shutdown(self):
+        if not self.running:
+            return
+
+        print("[SERVER] Initiating safe shutdown...")
+        self.running = False
+        
+        with self.lock:
+            for username, client_socket in list(self.clients.items()):
+                try:
+                    send_control(client_socket, {"type": "SERVER_CLOSE", "message": "Server is shutting down."})
+                    client_socket.shutdown(socket.SHUT_RDWR)
+                    client_socket.close()
+                except:
+                    pass
+            self.clients.clear()
+
+        if self.server_socket:
+            try:
+                self.server_socket.close()
+            except:
+                pass
