@@ -47,11 +47,39 @@ def user_chat(page):
     )
 
     chat_container = ft.Container(
-        content= ft.Text("Chat with me!"),
-        bgcolor="#001F2E",
+        ft.Column([
+
+            ft.Container(
+                ft.ListView(
+                    controls=[ft.Text("Chat with Alice", size=20, weight=ft.FontWeight.BOLD),],
+                    expand=True,
+                ),
+                expand=True,
+                border_radius=10,
+                bgcolor="#001F2E",
+                padding=ft.padding.all(10)
+
+            ),
+
+            ft.Row(
+                [
+                    ft.IconButton(ft.Icons.FILE_OPEN, on_click=lambda e: print("file open clicked")),
+                    ft.TextField(label="Type a message", expand=True, border_radius=10, bgcolor="#004466", color=ft.Colors.WHITE, focused_border_color=ft.Colors.BLUE_200, height=50),
+                    ft.IconButton(ft.Icons.SEND, on_click=lambda e: print("Send clicked")),
+                ],
+                alignment=ft.MainAxisAlignment.END,
+            ),
+            
+
+        ],
+        alignment=ft.MainAxisAlignment.END,
+        ),
+        bgcolor="#002D44",
         border_radius=10,
         expand=True,
         height=600,
+        alignment=ft.alignment.bottom_center,
+        padding=ft.padding.all(30)
 
     )
 
