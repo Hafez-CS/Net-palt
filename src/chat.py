@@ -8,18 +8,22 @@ class contact:
         self.container = ft.Container(
             content=ft.Row(
                 [
-                    ft.CircleAvatar(
-                        content=ft.Image(src=self.image_path, fit=ft.ImageFit.COVER),
+                    ft.Container(
+                        ft.CircleAvatar(
+                        content=ft.Image(src=self.image_path),
                         radius=20,
-                    ),
+                       ),
+                       border_radius=30,
+                    )
+                    ,
                     ft.Text(self.name, size=16)
                 ],
                 alignment=ft.MainAxisAlignment.START,
-                spacing=10
+                spacing=10,
             ),
             padding=ft.padding.all(10),
             width=280,
-            height=60,
+            height=65,
             border_radius=10,
             alignment=ft.alignment.center_left,
             ink=True,
@@ -28,31 +32,54 @@ class contact:
     def on_click(self, e):
         print(f"Contact {self.name} clicked!")
 
+
 def user_chat(page):
-
-
-
-
-    
 
     main_container = ft.Container(
         content= ft.ListView(
-            width=300,
-            height=500
+            width=450,
+            height=600,
+            expand=True,
         ),
-        alignment=ft.alignment.center,
+        border_radius=10,
+        width=450,
+        bgcolor="#002A46",
+    )
+
+    chat_container = ft.Container(
+        content= ft.Text("Chat with me!"),
+        bgcolor="#001F2E",
+        border_radius=10,
+        expand=True,
+        height=600,
+
     )
 
     for i in range(20):
-        contact_container = contact(f"Contact {i+1}", "assets/user.png").container
+        contact_container = contact(f"Contact {i+1}", "src/assets/profile.png").container
         main_container.content.controls.append(contact_container)
 
         
     return ft.View(
         "/main",
         [
-            main_container
+            ft.Row(controls=[
+                main_container,
+                chat_container]
+
+            )
         ],
         vertical_alignment=ft.MainAxisAlignment.CENTER,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        horizontal_alignment=ft.CrossAxisAlignment.START,
+        auto_scroll=True,
+        appbar= ft.AppBar(
+            title=ft.Text("Chat Application"),
+            center_title=True,
+            bgcolor="#001F2E",
+            actions=[
+                ft.IconButton(ft.Icons.SEARCH, on_click=lambda e: print("Search clicked")),
+                ft.IconButton(ft.Icons.MORE_VERT, on_click=lambda e: print("More clicked")),
+            ],
+        )
+
     )
