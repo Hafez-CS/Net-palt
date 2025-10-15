@@ -3,7 +3,10 @@ import models
 
 def login_view(page):
     """Creates the login screen View."""
-
+    page.window_height = 400
+    page.window_width = 400
+    page.window_resizable = False
+    
     def autenticate_user(e):
         user_data = models.get_user_by_username(username.value)
 
