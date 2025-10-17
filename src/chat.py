@@ -1,5 +1,14 @@
 import flet as ft
+import models
 
+def get_all_users():
+    models.init_db()
+    users = models.get_all_users_db()
+    return users
+
+def show_messege(msg,e):
+    print(msg)
+    
 class contact:
     def __init__(self, name, image_path):
         self.name = name
@@ -34,6 +43,7 @@ class contact:
 
 
 def user_chat(page):
+    print(get_all_users())
 
     main_container = ft.Container(
         content= ft.ListView(
@@ -46,14 +56,16 @@ def user_chat(page):
         bgcolor="#002A46",
     )
 
+    chat_list_view =  ft.ListView(
+                    controls=[ft.Text("Chat with Alice", size=20, weight=ft.FontWeight.BOLD),],
+                    expand=True,
+                )
+    
     chat_container = ft.Container(
         ft.Column([
 
             ft.Container(
-                ft.ListView(
-                    controls=[ft.Text("Chat with Alice", size=20, weight=ft.FontWeight.BOLD),],
-                    expand=True,
-                ),
+                chat_list_view,
                 expand=True,
                 border_radius=10,
                 bgcolor="#001F2E",
@@ -83,8 +95,10 @@ def user_chat(page):
 
     )
 
-    for i in range(20):
-        contact_container = contact(f"Contact {i+1}", "src/assets/profile.png").container
+    users = get_all_users()
+
+    for user in users:
+        contact_container = contact(user, "assets/profile.png").container
         main_container.content.controls.append(contact_container)
 
         
@@ -111,3 +125,6 @@ def user_chat(page):
         )
 
     )
+
+if __name__ == "__main__":
+    ft.app(target=user_chat)
