@@ -14,8 +14,10 @@ def login_view(page):
             if user_data:
                 _, stored_password_hash, role = user_data
                 if models.check_password_hash(password.value, stored_password_hash):
+                    #storing the username
+                    page.session.set("current_username", username.value)
                     page.go("/main") 
-                    return True, username, role
+                    
                 else:
                     error = ft.AlertDialog(
                         title=ft.Text("Wrong Password"),

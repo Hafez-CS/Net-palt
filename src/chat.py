@@ -6,8 +6,7 @@ def get_all_users():
     users = models.get_all_users_db()
     return users
 
-def show_messege(msg,e):
-    print(msg)
+
     
 class contact:
     def __init__(self, name, image_path):
@@ -38,12 +37,31 @@ class contact:
             ink=True,
             on_click=self.on_click
         )
+
     def on_click(self, e):
         print(f"Contact {self.name} clicked!")
 
 
 def user_chat(page):
-    print(get_all_users())
+
+    username = page.session.get("current_username")
+    def show_messege(e):
+        msg = text_input.value
+        if msg:
+            username_span = f"- {username}: "
+            
+            chat_list_view.controls.append(
+                ft.Text(
+                    spans=[
+                        ft.TextSpan(username_span, style= ft.TextStyle(size=16, color="#787878", italic=True)),
+                        ft.TextSpan(msg)
+                        ],
+                        size=18
+                        )
+                    )
+            text_input.value = ""
+            page.update()
+
 
     main_container = ft.Container(
         content= ft.ListView(
@@ -56,11 +74,31 @@ def user_chat(page):
         bgcolor="#002A46",
     )
 
+    #it contains the messages
     chat_list_view =  ft.ListView(
                     controls=[ft.Text("Chat with Alice", size=20, weight=ft.FontWeight.BOLD),],
                     expand=True,
                 )
+    #these are buttons and the text input
+    select_file_button = ft.IconButton(ft.Icons.FILE_OPEN,
+                                        on_click=lambda e: print("file open clicked")
+                                        )
+    text_input = ft.TextField(
+        label="Type a message",
+        expand=True,
+        border_radius=10,
+        bgcolor="#004466",
+        color=ft.Colors.WHITE,
+        focused_border_color=ft.Colors.BLUE_200,
+        height=50,
+        on_submit= show_messege
+    )
+
+    send_button = ft.IconButton(ft.Icons.SEND,
+                                 on_click=show_messege
+                                 )
     
+    #containing all the controls that handels the messages
     chat_container = ft.Container(
         ft.Column([
 
@@ -75,9 +113,9 @@ def user_chat(page):
 
             ft.Row(
                 [
-                    ft.IconButton(ft.Icons.FILE_OPEN, on_click=lambda e: print("file open clicked")),
-                    ft.TextField(label="Type a message", expand=True, border_radius=10, bgcolor="#004466", color=ft.Colors.WHITE, focused_border_color=ft.Colors.BLUE_200, height=50),
-                    ft.IconButton(ft.Icons.SEND, on_click=lambda e: print("Send clicked")),
+                    select_file_button,
+                    text_input,
+                    send_button,
                 ],
                 alignment=ft.MainAxisAlignment.END,
             ),
@@ -115,7 +153,7 @@ def user_chat(page):
         horizontal_alignment=ft.CrossAxisAlignment.START,
         auto_scroll=True,
         appbar= ft.AppBar(
-            title=ft.Text("Chat Application"),
+            title=ft.Text(f"Chat as {username} 💬"),
             center_title=True,
             bgcolor="#001F2E",
             actions=[
