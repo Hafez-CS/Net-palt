@@ -47,7 +47,10 @@ class ChatServer:
         self.server_socket = None
         self.server_thread = None
 
+        #setuping the database!
         models.init_db()
+
+
         self.available_files = self._get_file_list_from_dir() 
 
     def _get_file_list_from_dir(self):
@@ -58,6 +61,7 @@ class ChatServer:
                 files.append({"filename": filename, "filesize": os.path.getsize(filepath)})
         return files
     
+    #users that are online!
     def get_all_users_with_status(self):
         all_db_users = models.get_all_users_db() 
         users_with_status = []
@@ -102,6 +106,17 @@ class ChatServer:
                         return True
         return False
         
+    def send_private(self, msg, recipient):
+        #check if the user is online
+        users_with_status = self.get_all_users_with_status()
+        for user in users_with_status:
+            if user["username"] == recipient:
+                if user["is_online"]:
+                    print(f"{msg} --> {recipient}")
+                    return
+        print(f"the user {recipient} is offline!")  
+
+
     def broadcast_admin(self, message):
         self.broadcast_message(message, "ADMIN")
 
@@ -138,6 +153,7 @@ class ChatServer:
                 return
             
             username = hello_msg["username"]
+            print(f"hello {username}")
             
             with self.lock:
                 if username in self.clients:
@@ -146,16 +162,20 @@ class ChatServer:
                 self.clients[username] = client_socket
 
             if username != "admin": 
-                self.broadcast_message(f"{username} joined", "SERVER")
+                # self.broadcast_message(f"{username} joined", "SERVER")
                 send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
             
             while True:
                 msg = recv_control(client_socket)
                 
+                if msg["type"] == "PMSG":
+                    print(msg["text"])
+                    self.send_private(msg["text"], msg["recipient"])
+                    
                 if msg["type"] == "MSG":
                     # اگر ادمین پیام فرستاده، نیاز به برودکست نیست، فقط برای نمایش در پنل ادمین
-                    if username == "admin": 
-                        continue
+                    # if username == "admin": 
+                    #     continue
                     self.broadcast_message(msg["text"], username)
                 
                 elif msg["type"] == "FILE_META":
@@ -264,3 +284,7 @@ class ChatServer:
                 self.server_socket.close()
             except:
                 pass
+
+if __name__ == "__main__":
+    server = ChatServer()
+    server.start()
