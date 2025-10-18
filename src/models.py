@@ -231,7 +231,7 @@ def get_user_id_by_username(username, conn=None):
         if close_conn:
             conn.close()
 
-            
+
 def add_message_db(sender_username, recipient_username, text, is_group=False, conn=None):
     """Logs a new message (public or private) to the database."""
     close_conn = False
@@ -266,6 +266,66 @@ def add_message_db(sender_username, recipient_username, text, is_group=False, co
     except Exception as e:
         print(f"[DB ERROR] Add message failed: {e}")
         return False
+    finally:
+        if close_conn:
+            conn.close()
+
+# models.py (Add this function)
+
+def get_historical_messages_db(user1_username, user2_username, conn=None):
+    """
+    Fetches all private messages exchanged between two specific users, 
+    ordered by time.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+        
+    try:
+        cur = conn.cursor()
+        
+        # Get user IDs for the two usernames
+        user1_id = get_user_id_by_username(user1_username, conn)
+        user2_id = get_user_id_by_username(user2_username, conn)
+        
+        if user1_id is None or user2_id is None:
+            print("[DB ERROR] One or both users not found for message history.")
+            return []
+
+        # SQL query to select messages where:
+        # 1. Sender is user1 AND Recipient is user2
+        # OR
+        # 2. Sender is user2 AND Recipient is user1
+        # The result is ordered by sent_at time.
+        cur.execute(f"""
+            SELECT T1.username AS sender, T3.username AS recipient, T2.text, T2.sent_at 
+            FROM messages T2
+            JOIN users T1 ON T2.sender_user_id = T1.user_id
+            JOIN users T3 ON T2.recipient_user_id = T3.user_id
+            WHERE (
+                (T2.sender_user_id = ? AND T2.recipient_user_id = ?) OR
+                (T2.sender_user_id = ? AND T2.recipient_user_id = ?)
+            )
+            AND T2.is_group_message = 0 
+            ORDER BY T2.sent_at ASC
+        """, (user1_id, user2_id, user2_id, user1_id))
+        
+        # Fetch results and format them
+        messages = []
+        for row in cur.fetchall():
+            messages.append({
+                "sender": row[0],
+                "recipient": row[1],
+                "text": row[2],
+                "sent_at": row[3] # Unix timestamp
+            })
+            
+        return messages
+    
+    except Exception as e:
+        print(f"[DB ERROR] Fetch historical messages failed: {e}")
+        return []
     finally:
         if close_conn:
             conn.close()

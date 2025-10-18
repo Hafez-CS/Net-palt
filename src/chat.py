@@ -111,7 +111,8 @@ class contact:
         self.page = page
         self.name = name
         self.image_path = image_path
-        
+        self.current_user = self.page.session.get("current_username")
+
         self.container = ft.Container(
             content=ft.Row(
                 [
@@ -145,7 +146,46 @@ class contact:
         chat_list_view.controls.append(
             ft.Text(f" -- Chat With {self.name} -- ", size=20, weight=ft.FontWeight.BOLD)
         )
+        
+        messages = models.get_historical_messages_db(self.current_user, self.name)
+        
+        # 5. Display the loaded messages
+        for msg in messages:
+            sender = msg["sender"]
+            text = msg["text"]
+            
+            # Format the message for the chat window
+            is_current_user_message = (sender == self.current_user)
+            
+            # Use the existing show_messege logic for consistency, 
+            # or define a simple display logic here
+            
+            username_span_text = f"{sender}: "
+            if is_current_user_message:
+                # Align to the right and use a different style for self-sent messages
+                text_style = ft.TextStyle(size=16, color="#787878", italic=True)
+                alignment = ft.MainAxisAlignment.END
+            else:
+                # Align to the left for messages from the contact
+                text_style = ft.TextStyle(size=16, color=ft.Colors.BLUE_GREY_100, italic=True)
+                alignment = ft.MainAxisAlignment.START
 
+            chat_list_view.controls.append(
+                ft.Row(
+                    [
+                        ft.Text(
+                            spans=[
+                                ft.TextSpan(username_span_text, style=text_style),
+                                ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
+                            ],
+                            size=18
+                        )
+                    ],
+                    alignment=alignment # Align messages based on sender
+                )
+            )
+
+        
         self.page.update()
 
     def unlock_input(self):
