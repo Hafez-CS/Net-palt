@@ -170,7 +170,7 @@ def user_chat(page):
         recipient = current_recipient
         if msg:
             show_messege(msg.strip())
-            send_control(client, {"type": "PMSG","recipient":recipient, "text": msg.strip()})
+            send_control(client, {"type": "PMSG","username": username, "recipient":recipient, "text": msg.strip()})
 
     def show_messege(msg):
   

@@ -106,14 +106,22 @@ class ChatServer:
                         return True
         return False
         
-    def send_private(self, msg, recipient):
+    def send_private(self, msg, username, recipient):
         #check if the user is online
         users_with_status = self.get_all_users_with_status()
         for user in users_with_status:
             if user["username"] == recipient:
                 if user["is_online"]:
                     print(f"{msg} --> {recipient}")
-                    return
+
+                models.add_message_db(
+                    sender_username=username,
+                    recipient_username=recipient,
+                    text=msg,
+                    is_group=False
+                )
+                print("added to DB")
+                return
         print(f"the user {recipient} is offline!")  
 
 
@@ -170,7 +178,7 @@ class ChatServer:
                 
                 if msg["type"] == "PMSG":
                     print(msg["text"])
-                    self.send_private(msg["text"], msg["recipient"])
+                    self.send_private(msg["text"],msg["username"], msg["recipient"])
                     
                 if msg["type"] == "MSG":
                     # اگر ادمین پیام فرستاده، نیاز به برودکست نیست، فقط برای نمایش در پنل ادمین
