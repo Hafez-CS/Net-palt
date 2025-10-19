@@ -16,7 +16,10 @@ def login_view(page):
                 if models.check_password_hash(password.value, stored_password_hash):
                     #storing the username
                     page.session.set("current_username", username.value)
-                    page.go("/main") 
+                    if role == "user":
+                        page.go("/main") 
+                    elif role == "admin":
+                        page.go("/admin")
                     
                 else:
                     error = ft.AlertDialog(

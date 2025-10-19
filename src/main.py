@@ -3,6 +3,7 @@ import models
 from chat import user_chat
 from newlogin import login_view
 from screeninfo import get_monitors
+from admin import admin
 # 1. Define the component or view function
 
 
@@ -27,12 +28,15 @@ def main(page: ft.Page):
             page.views.append(login_view(page))
         elif page.route == "/main":
             page.views.append(user_chat(page))
+        elif page.route == "/admin":
+            page.views.append(admin(page))
+
 
         page.update()
 
     page.on_route_change = route_change
-    page.go(page.route)
-
+    # page.go(page.route)
+    page.go("/admin")
     
 # 4. Run the Flet app
 if __name__ == "__main__":
