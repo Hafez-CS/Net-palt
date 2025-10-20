@@ -4,9 +4,10 @@ import socket
 import threading
 import json
 import os
+import time
 
 HOST = "127.0.0.1"
-PORT = 5000
+PORT = 5001
 is_running = False 
 DOWNLOAD_DIR = "downloaded/"
 
@@ -203,6 +204,7 @@ def user_chat(page):
 
 
     username = page.session.get("current_username")
+    # username = "sadra"
     client = connect_to_server(username)
 
     def process_messege(e):
@@ -312,6 +314,20 @@ def user_chat(page):
         print(contact_container)
         main_container.content.controls.append(contact_container)
 
+
+    #on closing the program
+    def on_app_close(e):
+        if e.data == "close":
+            print("closing the client")
+            send_control(client, {"type": "QUIT"})
+            time.sleep(2)
+            print("closed")
+
+            page.window.destroy()
+
+
+    page.window.prevent_close = True
+    page.window.on_event = on_app_close
         
     return ft.View(
         "/main",

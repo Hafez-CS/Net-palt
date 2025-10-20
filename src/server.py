@@ -36,7 +36,7 @@ def recv_control(sock):
 # Chat Server
 # =========================
 class ChatServer:
-    def __init__(self, host="0.0.0.0", port=5000):
+    def __init__(self, host="0.0.0.0", port=5001):
         self.host = host
         self.port = port
         self.clients = {}  # {username: sock}
@@ -218,8 +218,10 @@ class ChatServer:
                     self.check_status(msg["admin_username"], msg["username"])
 
                 if msg["type"] == "PMSG":
-                    print(msg["text"])
-                    self.send_private(msg["text"],msg["username"], msg["recipient"])
+                    text = msg["text"]
+                    sender = msg["username"]
+                    recipient = msg["recipient"]
+                    self.send_private(text, sender, recipient)
                     
                 if msg["type"] == "MSG":
                     # اگر ادمین پیام فرستاده، نیاز به برودکست نیست، فقط برای نمایش در پنل ادمین
@@ -264,15 +266,17 @@ class ChatServer:
             
         finally:
             if username:
+                deluser = username
                 self.remove_client(username, client_socket)
+                print(f"{deluser} has been removed")
 
     def remove_client(self, username, client_socket):
         """Removes a client connection safely."""
         with self.lock:
             if username in self.clients and self.clients[username] == client_socket:
                 del self.clients[username]
-                if username != "admin":
-                    self.broadcast_message(f"{username} left", "SERVER")
+                # if username != "admin":
+                #     self.broadcast_message(f"{username} left", "SERVER")
                 try:
                     client_socket.close()
                 except:
