@@ -15,6 +15,35 @@ def start_server():
     server = ChatServer()
     server.start_background()
 
+class user_control(ft.Row):
+    def __init__(self):
+
+        self.kick_button = ft.ElevatedButton(text="kick", expand=True)
+        self.add_user_button = ft.ElevatedButton(text="add user",expand=True)
+        self.remove_user_button = ft.ElevatedButton(text="remove user",expand=True)
+
+        # self.container = ft.Container(
+        #     content= [
+        #         self.kick_button,
+        #         self.add_user_button,
+        #         self.remove_user_button
+        #     ],
+
+
+
+
+        super().__init__(
+            controls=[
+                self.kick_button,
+                self.add_user_button,
+                self.remove_user_button
+            ],
+            expand=True,
+            alignment=ft.alignment.top_center
+        )
+        
+
+
 
 class online_user(ft.Container):
 
@@ -32,7 +61,7 @@ class online_user(ft.Container):
         self.username = username
         self.avatar = avatar
         self.status = self.get_status()
-        status_container = ft.Container()
+
         
         avatar_stack = ft.Stack(
                 [
@@ -80,6 +109,7 @@ class online_user(ft.Container):
     
     def on_click_p(self, e):
         print("clicked")
+
 
 def get_all_users():
     models.init_db()
@@ -158,7 +188,8 @@ def admin(page):
     global online_users_container
     global refresh_thread_running
 
-    username = page.session.get("current_username")
+    # username = page.session.get("current_username")
+    username = "admin"
 
     def on_app_close(e: ft.ControlEvent):
         if e.data == "close":
@@ -209,17 +240,111 @@ def admin(page):
         border_radius=10,
         bgcolor= ft.Colors.GREY_900,
         padding=10,
+        height=700
     )
 
 
     refresh_users_thread = threading.Thread(target=refresh_users, args=(page,), daemon=True)
     refresh_users_thread.start()
 
+
+#it contains the messages
+    chat_list_view =  ft.ListView(
+        controls=[],
+        expand=True,
+    )
+    #these are buttons and the text input
+    select_file_button = ft.IconButton(
+        ft.Icons.FILE_OPEN,
+        on_click=lambda e: print("file open clicked"),
+        disabled=True
+    )
+
+
+    text_input = ft.TextField(
+        label="Type a message",
+        expand=True,
+        border_radius=10,
+        bgcolor="#004466",
+        color=ft.Colors.WHITE,
+        focused_border_color=ft.Colors.BLUE_200,
+        height=50,
+        # on_submit= process_messege,
+        disabled=True
+    )
+
+    send_button = ft.IconButton(ft.Icons.SEND,
+                                #  on_click=process_messege,
+                                 disabled=True
+                                 )
+    
+    chat_container = ft.Container(
+        ft.Column([
+
+            ft.Container(
+                chat_list_view,
+                expand=True,
+                border_radius=10,
+                bgcolor="#001F2E",
+                padding=ft.padding.all(10)
+
+            ),
+
+            ft.Row(
+                [
+                    select_file_button,
+                    text_input,
+                    send_button,
+                ],
+                alignment=ft.MainAxisAlignment.END,
+            ),
+            
+
+        ],
+        alignment=ft.MainAxisAlignment.END,
+        ),
+        bgcolor="#002D44",
+        border_radius=10,
+        expand=True,
+        height=600,
+        alignment=ft.alignment.bottom_center,
+        padding=ft.padding.all(30)
+
+    )
+
+
+    user_control_buttons = user_control()
+    control_container = ft.Container(
+        ft.Column(
+            [
+                ft.Container(
+                    user_control_buttons,
+                    alignment = ft.alignment.top_center
+                ),
+                chat_container
+            ],
+            expand=True,
+        
+        ),
+        bgcolor="#002D44",
+        expand=True,
+        height=700,
+        alignment=ft.alignment.bottom_center,
+        padding=ft.padding.all(5),
+        border_radius=10
+    )
+
     #task: adding the topbar menu and the back button when its clicked go to the login page
     return ft.View(
         "/admin",
         controls=[
-            users_section
+            ft.Row(
+                [
+                    users_section,
+                    control_container
+                ]
+
+            )
         ],
 
     )
