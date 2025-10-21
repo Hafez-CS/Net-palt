@@ -6,8 +6,9 @@ from server import ChatServer
 import time
 import threading
 
+
 HOST = "127.0.0.1"
-PORT = 5000
+PORT = 5001
 
 def start_server():
     global server
@@ -46,7 +47,6 @@ class online_user(ft.Container):
             )
         
         if self.status :
-            print("here green")
             avatar_stack.controls.append(
                 ft.Container(
                         content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
@@ -54,7 +54,6 @@ class online_user(ft.Container):
                     ),
             )
         else:
-            print("im in black")
             avatar_stack.controls.append(
                 ft.Container(
                         content=ft.CircleAvatar(bgcolor=ft.Colors.GREY_600, radius=5),
@@ -127,23 +126,64 @@ def get_online_users():
     pass
 
 def refresh_users(page):
-    while True:
-        online_users_container.controls.clear()
-        all_users = get_all_users()
-        for user in all_users:
-            online_users_container.controls.append(
-                online_user(user, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png")
-            )
-        page.update()
-        time.sleep(2)
+    global refresh_thread_running
+
+    refresh_thread_running = True # Set the flag when thread starts
+    print("Refresh thread started.")
+    
+    # Loop while the global flag is True
+    while refresh_thread_running: 
+        try:
+            online_users_container.controls.clear()
+            all_users = get_all_users()
+            for user in all_users:
+                # Assuming ChatServer and online_user are defined and work
+                online_users_container.controls.append(
+                    online_user(user, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png")
+                )
+            page.update()
+        except Exception as e:
+            # Handle exceptions during update/network operations
+            print(f"Error in refresh_users: {e}") 
+        
+        # Check flag again before sleeping
+        if refresh_thread_running: 
+            time.sleep(2)
+    
+    print("Refresh thread safely stopped.")
+
 
 def admin(page):
     global username
     global online_users_container
+    global refresh_thread_running
 
     username = page.session.get("current_username")
 
+    def on_app_close(e: ft.ControlEvent):
+        if e.data == "close":
+            """Handler for the window closing event."""
+            print("Initiating clean application shutdown...")
+            
+            # Stop the User Refreshing Thread
+            global refresh_thread_running
+            refresh_thread_running = False
+            
+            # Optional: Give the thread a moment to finish
+            time.sleep(0.5) 
 
+            # Safely Shutdown the Chat Server
+            if 'server' in globals() and server:
+                server.safe_shutdown() 
+                print("ChatServer shutdown requested.")
+            
+            # Explicitly Destroy the Flet Window
+            page.window.destroy()
+            print("Flet window destroyed.")
+
+        else:
+            print("not closing")
+    
     #task: adding a dialog error when server is not running and back to login screen!
     try:
         #starting the server
@@ -155,6 +195,8 @@ def admin(page):
         print(f"Error : {e}")
     # users_status = ChatServer.get_all_users_with_status()
     
+    page.window.prevent_close = True
+    page.window.on_event = on_app_close
 
     online_users_container = ft.ListView(
         controls=[],
@@ -170,7 +212,7 @@ def admin(page):
     )
 
 
-    refresh_users_thread = threading.Thread(target=refresh_users, args=(page,))
+    refresh_users_thread = threading.Thread(target=refresh_users, args=(page,), daemon=True)
     refresh_users_thread.start()
 
     #task: adding the topbar menu and the back button when its clicked go to the login page
