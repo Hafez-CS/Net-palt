@@ -18,8 +18,23 @@ def start_server():
 class user_control(ft.Row):
     def __init__(self):
 
-        self.kick_button = ft.ElevatedButton(text="kick", expand=True, bgcolor=ft.Colors.RED, color=ft.Colors.WHITE, icon= ft.Icons.PERSON_REMOVE_ALT_1_ROUNDED)
-        self.add_user_button = ft.ElevatedButton(text="add user",expand=True, bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE, icon= ft.Icons.PERSON_ADD_ALT_1_ROUNDEDgit)
+        self.kick_button = ft.ElevatedButton(
+            text="kick", 
+            expand=True, 
+            bgcolor=ft.Colors.RED, 
+            color=ft.Colors.WHITE, 
+            icon= ft.Icons.PERSON_REMOVE_ALT_1_ROUNDED
+            )
+        
+        self.add_user_button = ft.ElevatedButton(
+            text="add user",
+            expand=True,
+            bgcolor=ft.Colors.GREEN, 
+            color=ft.Colors.WHITE, 
+            icon= ft.Icons.PERSON_ADD_ALT_1_ROUNDED, 
+            on_click=self.add_user
+            )
+        
         self.remove_user_button = ft.OutlinedButton(
             text="remove user",
             expand=True,
@@ -28,7 +43,6 @@ class user_control(ft.Row):
                 ),
             icon= ft.Icons.REMOVE_CIRCLE,
         )
-
 
         super().__init__(
             controls=[
@@ -40,6 +54,72 @@ class user_control(ft.Row):
             alignment=ft.alignment.top_center
         )
         
+    def add_user(self,e):
+        self.username_input = ft.TextField(label="Username", width=300)
+        self.password_input = ft.TextField(label="Password", width=300, password=True, can_reveal_password=True)
+        self.role_input = ft.SegmentedButton(
+                        selected_icon=ft.Icon(ft.Icons.CHECK_CIRCLE),
+                        selected={"user"},
+                        allow_multiple_selection=False,
+                        segments=[
+                            ft.Segment(
+                                value="user",
+                                label=ft.Text("user"),
+                                icon=ft.Icon(ft.Icons.PERSON_ROUNDED),
+                            ),
+                            ft.Segment(
+                                value="admin",
+                                label=ft.Text("admin"),
+                                icon=ft.Icon(ft.Icons.SUPERVISED_USER_CIRCLE),
+                            ),
+                        ],
+                    )
+        
+        self.add_user_dialog = ft.AlertDialog(
+            title=ft.Text("Add New User"),
+            content=ft.Column(
+                [   
+                    #prompt for usename and password
+                    self.username_input,
+                    self.password_input,
+                    #select between user and admin
+                    self.role_input
+                ]
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda e: e.page.close(self.add_user_dialog)),
+                ft.ElevatedButton("Add", on_click=lambda e: self.confirm_add_user(e)),
+                
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+            alignment=ft.alignment.center
+        )
+        e.page.open(self.add_user_dialog)
+
+    def confirm_add_user(self, e):
+        self.username = self.username_input.value
+        self.password = self.password_input.value
+        self.role = self.role_input.selected
+
+        if not self.username:
+            self.username_input.error_text = "username can not be empty"
+            self.add_user_dialog.update()
+        if not self.password:
+            self.password_input.error_text = "password can not be empty"
+            self.password_input.update()
+
+        if self.username and self.password:
+            print(
+                self.username,self.password,self.role
+            )
+            e.page.close(self.add_user_dialog)
+
+
+    def kick_user(self, e):
+        pass
+
+    def remove_user(self, e):
+        pass
 
 
 
