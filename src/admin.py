@@ -149,7 +149,6 @@ def admin(page):
         #starting the server
         start_server()
         time.sleep(1)
-
         #coneccting to server as a client
         client = connect_to_server(username)
     except Exception as e:
