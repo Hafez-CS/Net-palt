@@ -113,6 +113,7 @@ class contact:
         self.name = name
         self.image_path = image_path
         self.current_user = self.page.session.get("current_username")
+        # self.current_user = "sadra"
 
         self.container = ft.Container(
             content=ft.Row(

@@ -150,12 +150,12 @@ class ChatServer:
             print(f"[PM] User {recipient} is offline. Message will be logged only.")
 
         
-
+        print(recipient)
         #saving the messsage to DataBase
         models.add_message_db(
             sender_username=username,
             recipient_username=recipient,
-            text=msg["text"],
+            text=msg["text"] if recipient_socket else msg,
             is_group=False
         )
 
