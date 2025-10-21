@@ -18,18 +18,16 @@ def start_server():
 class user_control(ft.Row):
     def __init__(self):
 
-        self.kick_button = ft.ElevatedButton(text="kick", expand=True)
-        self.add_user_button = ft.ElevatedButton(text="add user",expand=True)
-        self.remove_user_button = ft.ElevatedButton(text="remove user",expand=True)
-
-        # self.container = ft.Container(
-        #     content= [
-        #         self.kick_button,
-        #         self.add_user_button,
-        #         self.remove_user_button
-        #     ],
-
-
+        self.kick_button = ft.ElevatedButton(text="kick", expand=True, bgcolor=ft.Colors.RED, color=ft.Colors.WHITE, icon= ft.Icons.PERSON_REMOVE_ALT_1_ROUNDED)
+        self.add_user_button = ft.ElevatedButton(text="add user",expand=True, bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE, icon= ft.Icons.PERSON_ADD_ALT_1_ROUNDEDgit)
+        self.remove_user_button = ft.OutlinedButton(
+            text="remove user",
+            expand=True,
+            style= ft.ButtonStyle(
+                color= ft.Colors.RED_ACCENT
+                ),
+            icon= ft.Icons.REMOVE_CIRCLE,
+        )
 
 
         super().__init__(
