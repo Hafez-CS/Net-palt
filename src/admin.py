@@ -51,6 +51,7 @@ class user_control(ft.Row):
                 color= ft.Colors.RED_ACCENT
                 ),
             icon= ft.Icons.REMOVE_CIRCLE,
+            on_click=self.remove_user
         )
 
         super().__init__(
@@ -134,8 +135,27 @@ class user_control(ft.Row):
         pass
 
     def remove_user(self, e):
-        pass
+        self.users_list = get_all_users()
+        options = []
 
+        for user in self.users_list:
+            options.append(
+                ft.DropdownOption(
+                    key=user,
+                    content=ft.Text(f"{user}")   
+                )
+            )
+        self.user_list_dropdown = ft.Dropdown(label="users",options=options,expand=True)
+        self.submit_user_button = ft.ElevatedButton(text="remove", color=ft.Colors.RED, expand=True)
+        self.text = ft.Text("please select a user", font_family=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+        self.remove_alert = ft.AlertDialog(
+            modal=False,
+            content=self.user_list_dropdown,
+            actions=[self.submit_user_button],
+            alignment=ft.alignment.center,
+        )
+
+        e.page.open(self.remove_alert)
 
 
 class online_user(ft.Container):
