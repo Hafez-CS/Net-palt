@@ -5,7 +5,7 @@ import socket
 from server import ChatServer
 import time
 import threading
-
+import bcrypt
 
 HOST = "127.0.0.1"
 PORT = 5001
@@ -14,6 +14,15 @@ def start_server():
     global server
     server = ChatServer()
     server.start_background()
+
+
+def hash_password(password):
+    """Generates a secure hash for a given password"""
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password_bytes, salt)
+    return hashed_password.decode('utf-8')
+
 
 class user_control(ft.Row):
     def __init__(self):
@@ -109,9 +118,15 @@ class user_control(ft.Row):
             self.password_input.update()
 
         if self.username and self.password:
-            print(
-                self.username,self.password,self.role
-            )
+            self.role = list(self.role)
+
+            hashed_password = hash_password(self.password)
+            if models.add_user_db(self.username, hashed_password, self.role[0]):
+                print("Success", f"User {self.username} added with role {self.role[0]}.")
+            else:
+                print("Error", f"User {self.username} already exists or failed to add.")
+
+
             e.page.close(self.add_user_dialog)
 
 
@@ -290,8 +305,6 @@ def admin(page):
             page.window.destroy()
             print("Flet window destroyed.")
 
-        else:
-            print("not closing")
     
     #task: adding a dialog error when server is not running and back to login screen!
     try:
