@@ -32,7 +32,8 @@ class user_control(ft.Row):
             expand=True, 
             bgcolor=ft.Colors.RED, 
             color=ft.Colors.WHITE, 
-            icon= ft.Icons.PERSON_REMOVE_ALT_1_ROUNDED
+            icon= ft.Icons.PERSON_REMOVE_ALT_1_ROUNDED,
+            on_click=self.kick_user
             )
         
         self.add_user_button = ft.ElevatedButton(
@@ -131,13 +132,10 @@ class user_control(ft.Row):
             e.page.close(self.add_user_dialog)
 
 
-    def kick_user(self, e):
-        pass
-
-    def remove_user(self, e):
+    #build a dropdown for showing all users
+    def build_user_dropdown(self):
         self.users_list = get_all_users()
         options = []
-
         for user in self.users_list:
             options.append(
                 ft.DropdownOption(
@@ -145,7 +143,29 @@ class user_control(ft.Row):
                     content=ft.Text(f"{user}")   
                 )
             )
-        self.user_list_dropdown = ft.Dropdown(label="users",options=options,expand=True, enable_search=True)
+        return ft.Dropdown(label="users", options=options, expand=True, enable_search=True)
+
+    def kick_user(self, e):
+        print(e)
+        self.user_list_dropdown = self.build_user_dropdown()
+        self.submit_user_button = ft.ElevatedButton(text="kick", color=ft.Colors.RED, expand=True, on_click=self.confirm_kick_user)
+        self.text = ft.Text("please select a user", font_family=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+        self.kick_alert = ft.AlertDialog(
+            modal=False,
+            content=self.user_list_dropdown,
+            actions=[self.submit_user_button],
+            alignment=ft.alignment.center,
+        )
+
+        e.page.open(self.kick_alert)
+
+    def remove_user(self, e):
+
+        try:
+            self.user_list_dropdown = self.build_user_dropdown()
+        except Exception as e:
+            print(f"something went wrong: {e}")
+
         self.submit_user_button = ft.ElevatedButton(text="remove", color=ft.Colors.RED, expand=True, on_click=self.confirm_remove_user)
         self.text = ft.Text("please select a user", font_family=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
         self.remove_alert = ft.AlertDialog(
