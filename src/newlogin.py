@@ -3,7 +3,10 @@ import models
 
 def login_view(page):
     """Creates the login screen View."""
-
+    page.window_height = 400
+    page.window_width = 400
+    page.window_resizable = False
+    
     def autenticate_user(e):
         user_data = models.get_user_by_username(username.value)
 
@@ -11,8 +14,13 @@ def login_view(page):
             if user_data:
                 _, stored_password_hash, role = user_data
                 if models.check_password_hash(password.value, stored_password_hash):
-                    page.go("/main") 
-                    return True, username, role
+                    #storing the username
+                    page.session.set("current_username", username.value)
+                    if role == "user":
+                        page.go("/main") 
+                    elif role == "admin":
+                        page.go("/admin")
+                    
                 else:
                     error = ft.AlertDialog(
                         title=ft.Text("Wrong Password"),

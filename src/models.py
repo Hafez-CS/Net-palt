@@ -2,6 +2,8 @@
 import sqlite3
 import bcrypt
 import os
+import time
+
 
 DB_FILE = "chat_app.db"
 ADMIN_USERNAME = "admin"
@@ -39,6 +41,7 @@ def init_db():
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'user'
         )""")
+
         # --- 2. groups Table ---
         cur.execute("""
         CREATE TABLE IF NOT EXISTS groups (
@@ -106,6 +109,20 @@ def init_db():
             FOREIGN KEY (task_id) REFERENCES tasks (task_id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
         )""")
+
+        # --- 8 messages
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_user_id INTEGER NOT NULL,
+                recipient_user_id INTEGER, -- NULL for public/broadcast messages
+                text TEXT NOT NULL,
+                sent_at INTEGER NOT NULL,
+                is_group_message BOOLEAN NOT NULL DEFAULT 0,
+                
+                FOREIGN KEY (sender_user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_user_id) REFERENCES users (user_id) ON DELETE SET NULL
+            )""")
             
         # Add initial admin user if not exists
         if not get_user_by_username(ADMIN_USERNAME, conn):
@@ -191,6 +208,124 @@ def remove_user_db(username, conn=None):
     except Exception as e:
         print(f"[DB ERROR] Remove user failed: {e}")
         return False
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def get_user_id_by_username(username, conn=None):
+    """Fetches user ID by username."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT user_id FROM users WHERE username = ?", (username,))
+        result = cur.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        print(f"[DB ERROR] Fetch user ID failed: {e}")
+        return None
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def add_message_db(sender_username, recipient_username, text, is_group=False, conn=None):
+    """Logs a new message (public or private) to the database."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        
+        # Get user IDs
+        sender_id = get_user_id_by_username(sender_username, conn)
+        recipient_id = get_user_id_by_username(recipient_username, conn) if recipient_username else None
+        
+        if sender_id is None:
+            print(f"[DB ERROR] Sender '{sender_username}' not found.")
+            return False
+
+        # If it's a private message, ensure recipient is valid (unless public)
+        if recipient_username and recipient_id is None:
+             print(f"[DB ERROR] Recipient '{recipient_username}' not found.")
+             return False
+
+        current_time = int(time.time()) # time.time() is used for INTEGER timestamps
+        
+        cur.execute("""
+            INSERT INTO messages (sender_user_id, recipient_user_id, text, sent_at, is_group_message)
+            VALUES (?, ?, ?, ?, ?)
+        """, (sender_id, recipient_id, text, current_time, 1 if is_group else 0))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[DB ERROR] Add message failed: {e}")
+        return False
+    finally:
+        if close_conn:
+            conn.close()
+
+# models.py (Add this function)
+
+def get_historical_messages_db(user1_username, user2_username, conn=None):
+    """
+    Fetches all private messages exchanged between two specific users, 
+    ordered by time.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+        
+    try:
+        cur = conn.cursor()
+        
+        # Get user IDs for the two usernames
+        user1_id = get_user_id_by_username(user1_username, conn)
+        user2_id = get_user_id_by_username(user2_username, conn)
+        
+        if user1_id is None or user2_id is None:
+            print("[DB ERROR] One or both users not found for message history.")
+            return []
+
+        # SQL query to select messages where:
+        # 1. Sender is user1 AND Recipient is user2
+        # OR
+        # 2. Sender is user2 AND Recipient is user1
+        # The result is ordered by sent_at time.
+        cur.execute(f"""
+            SELECT T1.username AS sender, T3.username AS recipient, T2.text, T2.sent_at 
+            FROM messages T2
+            JOIN users T1 ON T2.sender_user_id = T1.user_id
+            JOIN users T3 ON T2.recipient_user_id = T3.user_id
+            WHERE (
+                (T2.sender_user_id = ? AND T2.recipient_user_id = ?) OR
+                (T2.sender_user_id = ? AND T2.recipient_user_id = ?)
+            )
+            AND T2.is_group_message = 0 
+            ORDER BY T2.sent_at ASC
+        """, (user1_id, user2_id, user2_id, user1_id))
+        
+        # Fetch results and format them
+        messages = []
+        for row in cur.fetchall():
+            messages.append({
+                "sender": row[0],
+                "recipient": row[1],
+                "text": row[2],
+                "sent_at": row[3] # Unix timestamp
+            })
+            
+        return messages
+    
+    except Exception as e:
+        print(f"[DB ERROR] Fetch historical messages failed: {e}")
+        return []
     finally:
         if close_conn:
             conn.close()

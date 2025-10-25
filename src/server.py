@@ -36,7 +36,7 @@ def recv_control(sock):
 # Chat Server
 # =========================
 class ChatServer:
-    def __init__(self, host="0.0.0.0", port=5000):
+    def __init__(self, host="0.0.0.0", port=5001):
         self.host = host
         self.port = port
         self.clients = {}  # {username: sock}
@@ -47,7 +47,10 @@ class ChatServer:
         self.server_socket = None
         self.server_thread = None
 
+        #setuping the database!
         models.init_db()
+
+
         self.available_files = self._get_file_list_from_dir() 
 
     def _get_file_list_from_dir(self):
@@ -58,6 +61,7 @@ class ChatServer:
                 files.append({"filename": filename, "filesize": os.path.getsize(filepath)})
         return files
     
+    #users that are online!
     def get_all_users_with_status(self):
         all_db_users = models.get_all_users_db() 
         users_with_status = []
@@ -70,8 +74,18 @@ class ChatServer:
                 users_with_status.append({"username": username, "is_online": is_online})
         
         return users_with_status
+    
+    def get_online_usernames(self):
+        """Returns a thread-safe set of currently online usernames."""
+        with self.lock:
+            return set(self.clients.keys())
+        
+    def check_status(self, admin_username, username):
+        client_socket = None
+        online_set = set(self.clients.keys())
+        # if username in online_set:
+            
 
-    # server.py (تابع kick_by_username)
 
     def kick_by_username(self, username_to_kick):
         with self.lock:
@@ -101,7 +115,54 @@ class ChatServer:
                         print(f"[SERVER] Removed client {username_to_kick} from list.")
                         return True
         return False
+    
+    
+           
+    def send_private(self, msg, username, recipient):
+        #check if the user is online
+        users_with_status = self.get_all_users_with_status()
+        """
+        Sends a private message to a recipient. 
+        Logs the message to the database and attempts to send over the socket if the recipient is online.
+        """
+        recipient_socket = None
+
+        # 1. Check if the recipient is currently online and get their socket
+        with self.lock:
+            recipient_socket = self.clients.get(recipient)
+
+        # 2. If online, attempt to send the message over the socket
+        if recipient_socket:
+            print(f"Attempting to send private message from {username} to {recipient}: {msg}")
+            
+            try:
+                msg = {"type": "PMSG_RECV", "username": username, "text": msg}
+                send_control(recipient_socket, msg)
+                print(f"[PM] Message delivered to online user: {recipient}")
+            except:
+                # If sending failed, the user might have just disconnected.
+                # The handle_client loop will eventually clean this up, 
+                # but we can also trigger a cleanup here.
+                print(f"[PM] Failed to send message to {recipient}. Marking as offline.")
+                # We will rely on the main thread/loop to eventually call remove_client. 
+                # For a private message, we just log it as is.
+        else:
+            print(f"[PM] User {recipient} is offline. Message will be logged only.")
+
         
+        print(recipient)
+        #saving the messsage to DataBase
+        models.add_message_db(
+            sender_username=username,
+            recipient_username=recipient,
+            text=msg["text"] if recipient_socket else msg,
+            is_group=False
+        )
+
+        print("[PM] Message added to DB.")
+
+
+
     def broadcast_admin(self, message):
         self.broadcast_message(message, "ADMIN")
 
@@ -138,6 +199,7 @@ class ChatServer:
                 return
             
             username = hello_msg["username"]
+            print(f"hello {username}")
             
             with self.lock:
                 if username in self.clients:
@@ -146,16 +208,25 @@ class ChatServer:
                 self.clients[username] = client_socket
 
             if username != "admin": 
-                self.broadcast_message(f"{username} joined", "SERVER")
+                # self.broadcast_message(f"{username} joined", "SERVER")
                 send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
             
             while True:
                 msg = recv_control(client_socket)
                 
+                if msg["type"] == "get_status":
+                    self.check_status(msg["admin_username"], msg["username"])
+
+                if msg["type"] == "PMSG":
+                    text = msg["text"]
+                    sender = msg["username"]
+                    recipient = msg["recipient"]
+                    self.send_private(text, sender, recipient)
+                    
                 if msg["type"] == "MSG":
                     # اگر ادمین پیام فرستاده، نیاز به برودکست نیست، فقط برای نمایش در پنل ادمین
-                    if username == "admin": 
-                        continue
+                    # if username == "admin": 
+                    #     continue
                     self.broadcast_message(msg["text"], username)
                 
                 elif msg["type"] == "FILE_META":
@@ -195,15 +266,17 @@ class ChatServer:
             
         finally:
             if username:
+                deluser = username
                 self.remove_client(username, client_socket)
+                print(f"{deluser} has been removed")
 
     def remove_client(self, username, client_socket):
         """Removes a client connection safely."""
         with self.lock:
             if username in self.clients and self.clients[username] == client_socket:
                 del self.clients[username]
-                if username != "admin":
-                    self.broadcast_message(f"{username} left", "SERVER")
+                # if username != "admin":
+                #     self.broadcast_message(f"{username} left", "SERVER")
                 try:
                     client_socket.close()
                 except:
@@ -264,3 +337,7 @@ class ChatServer:
                 self.server_socket.close()
             except:
                 pass
+
+if __name__ == "__main__":
+    server = ChatServer()
+    server.start()
