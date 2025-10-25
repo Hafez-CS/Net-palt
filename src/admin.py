@@ -145,8 +145,8 @@ class user_control(ft.Row):
                     content=ft.Text(f"{user}")   
                 )
             )
-        self.user_list_dropdown = ft.Dropdown(label="users",options=options,expand=True)
-        self.submit_user_button = ft.ElevatedButton(text="remove", color=ft.Colors.RED, expand=True)
+        self.user_list_dropdown = ft.Dropdown(label="users",options=options,expand=True, enable_search=True)
+        self.submit_user_button = ft.ElevatedButton(text="remove", color=ft.Colors.RED, expand=True, on_click=self.confirm_remove_user)
         self.text = ft.Text("please select a user", font_family=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
         self.remove_alert = ft.AlertDialog(
             modal=False,
@@ -156,6 +156,20 @@ class user_control(ft.Row):
         )
 
         e.page.open(self.remove_alert)
+
+
+    def confirm_remove_user(self, e):
+        if self.user_list_dropdown.value:
+            remove_username = self.user_list_dropdown.value
+            try:
+                if models.remove_user_db(remove_username):
+                    print(f"user {remove_username} is removed!")
+                    server.kick_by_username(remove_username)
+                    print(f"user {remove_username} is disconnected!")
+            except Exception as e :
+                print(f"something went wrong in removing user: {e}")
+            finally:
+                e.page.close(self.remove_alert)
 
 
 class online_user(ft.Container):

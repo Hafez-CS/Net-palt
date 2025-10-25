@@ -94,24 +94,23 @@ class ChatServer:
             if client_socket:
                 kicked_successfully = False
                 try:
-                    # 1. ارسال پیام کیک
+                    # sending kick message
                     send_control(client_socket, {"type": "KICKED", "message": "You have been kicked by the admin."})
                     
-                    # 2. قطع سوکت و بستن آن
-                    time.sleep(0.1) # یک مکث کوتاه برای اطمینان از ارسال پیام
+                    # closing the socket
+                    time.sleep(0.1) 
                     client_socket.shutdown(socket.SHUT_RDWR)
                     client_socket.close()
                     kicked_successfully = True
 
                 except Exception as e:
-                    # اگر در فرآیند ارسال پیام یا بستن سوکت خطا رخ دهد
                     print(f"[SERVER ERROR] Error during socket closure for {username_to_kick}: {e}")
                     
                 finally:
-                    # 3. حذف از لیست سرور (مهمترین قسمت برای رفع فریز)
+                    #removing from list
                     if username_to_kick in self.clients:
                         del self.clients[username_to_kick]
-                        self.broadcast_message(f"[{username_to_kick} was kicked by admin]", "SERVER")
+                        # self.broadcast_message(f"[{username_to_kick} was kicked by admin]", "SERVER")
                         print(f"[SERVER] Removed client {username_to_kick} from list.")
                         return True
         return False
