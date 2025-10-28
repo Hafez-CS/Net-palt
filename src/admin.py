@@ -6,14 +6,23 @@ from server import ChatServer
 import time
 import threading
 import bcrypt
+import sys
 
 HOST = "127.0.0.1"
 PORT = 5001
+RUNNING = False
+
 
 def start_server():
     global server
-    server = ChatServer()
-    server.start_background()
+    try:    
+        server = ChatServer()
+        server.start_background()
+    except Exception as e:
+        print(f"something went wrong in starting the server: {e}")
+        sys.exit()
+    finally:
+        RUNNING = True
 
 
 def hash_password(password):
