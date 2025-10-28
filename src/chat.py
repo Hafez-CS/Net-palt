@@ -23,6 +23,47 @@ def get_all_users():
     users = models.get_all_users_db()
     return users
 
+
+async def listen_for_messages(page, reader):
+    global current_recipient
+
+    while True:
+        try:
+            data = await reader.readline()
+            if not data:
+                print("❌ ارتباط با سرور قطع شد.")
+                break
+
+            message = data.decode().strip()
+            sender, text = message.split(":", 1)
+
+            # اگه در چت با همین شخص هستیم
+            if sender == current_recipient:
+                chat_list_view.controls.append(
+                    ft.Row(
+                        [
+                            ft.Text(
+                                spans=[
+                                    ft.TextSpan(f"{sender}: ", style=ft.TextStyle(size=16, color="#787878")),
+                                    ft.TextSpan(text.strip(), style=ft.TextStyle(color=ft.Colors.WHITE))
+                                ],
+                                size=18
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.START
+                    )
+                )
+                page.update()
+            else:
+                # فقط اطلاع بده که پیام اومده
+                print(f"🔔 پیام جدید از {sender}")
+                # یا مثلاً یه نوتیف گرافیکی بذار کنار اسمش در contact
+                # contact_instance.show_notification(sender)
+        except Exception as e:
+            print("⚠️ خطا در گوش دادن به پیام‌ها:", e)
+            break
+        
+
 def send_control(sock, data: dict):
     """Send a JSON control message with a fixed header length"""
     j = json.dumps(data).encode('utf-8')

@@ -159,6 +159,17 @@ class user_control(ft.Row):
 
         e.page.open(self.kick_alert)
 
+
+    def confirm_kick_user(self,e):
+        self.kicked_username = self.user_list_dropdown.value
+        if self.kicked_username:
+            try:
+                server.kick_by_username(self.kicked_username)
+                print(f"user {self.kicked_username} has been kicked out from the server!")
+            except Exception as e:
+                print(f"error while kicking the user: {e}")
+            
+            
     def remove_user(self, e):
 
         try:

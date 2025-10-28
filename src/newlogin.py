@@ -9,7 +9,6 @@ def login_view(page):
     
     def autenticate_user(e):
         user_data = models.get_user_by_username(username.value)
-
         if username.value and password.value:
             if user_data:
                 _, stored_password_hash, role = user_data
