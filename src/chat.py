@@ -8,7 +8,7 @@ import time
 
 HOST = "127.0.0.1"
 PORT = 5001
-is_running = False 
+RUNNING = False 
 DOWNLOAD_DIR = "downloaded/"
 
 def setup_download_directory(directory_name):
@@ -142,11 +142,42 @@ def connect_to_server(username):
     client.connect((HOST, PORT))
     # Introduce to server
     send_control(client, {"type": "HELLO", "username": username})
-    is_running = True
+    RUNNING = True
     # threading.Thread(target=recv_loop, daemon=True).start()
     print("connected")
     return client
 
+def recv_loop(self):
+    try:
+        while RUNNING:
+            msg = recv_control(self.client)
+            if current_recipient == msg["username"]:
+                
+                if msg["type"] == "PMSG_RECV":
+                    
+                if msg["type"] == "MSG":
+                    self.show_msg(f"{msg['username']}: {msg['text']}")
+                elif msg["type"] == "USER_JOIN":
+                    self.show_msg(f"[{msg['username']} joined]")
+                elif msg["type"] == "USER_LEFT":
+                    self.show_msg(f"[{msg['username']} left]")
+                elif msg["type"] == "SERVER_CLOSE": 
+                    self.show_msg(f"[SERVER]: {msg.get('message', 'Server has closed.')}")
+                    break
+                elif msg["type"] == "ERROR":
+                    self.show_msg("[Error: " + msg.get("message","") + "]")
+    except socket.error as e:
+        if RUNNING:
+            self.show_msg("[CONNECTION LOST] Admin panel connection to server closed unexpectedly.")
+    except Exception as e:
+        print("Error in admin recv loop:", e)
+    finally:
+        RUNNING = False
+        # در صورت خروج غیرعادی، تلاش می‌کنیم سوکت را ببندیم
+        try:
+            self.client.close()
+        except:
+            pass
 
 class contact:
     def __init__(self,page, name, image_path):
@@ -189,6 +220,8 @@ class contact:
         chat_list_view.controls.append(
             ft.Text(f" -- Chat With {self.name} -- ", size=20, weight=ft.FontWeight.BOLD)
         )
+
+
         
         messages = models.get_historical_messages_db(self.current_user, self.name)
         
@@ -237,6 +270,22 @@ class contact:
                 send_button.disabled = False
                 select_file_button.disabled = False
 
+    def show_message(self,msg):
+
+        chat_list_view.controls.append(
+                ft.Row(
+                    [
+                        ft.Text(
+                            spans=[
+                                ft.TextSpan(self.current_user, style=text_style),
+                                ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
+                            ],
+                            size=18
+                        )
+                    ],
+                    alignment=alignment # Align messages based on sender
+                )
+            )
 
 def user_chat(page):
     global chat_list_view
@@ -352,7 +401,8 @@ def user_chat(page):
     users = get_all_users()
 
     for user in users:
-        contact_container = contact(page, user, "assets/profile.png").container
+        user = contact(page, user, "assets/profile.png")
+        contact_container = user.container
         print(contact_container)
         main_container.content.controls.append(contact_container)
 
