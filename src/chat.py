@@ -24,45 +24,6 @@ def get_all_users():
     return users
 
 
-async def listen_for_messages(page, reader):
-    global current_recipient
-
-    while True:
-        try:
-            data = await reader.readline()
-            if not data:
-                print("❌ ارتباط با سرور قطع شد.")
-                break
-
-            message = data.decode().strip()
-            sender, text = message.split(":", 1)
-
-            # اگه در چت با همین شخص هستیم
-            if sender == current_recipient:
-                chat_list_view.controls.append(
-                    ft.Row(
-                        [
-                            ft.Text(
-                                spans=[
-                                    ft.TextSpan(f"{sender}: ", style=ft.TextStyle(size=16, color="#787878")),
-                                    ft.TextSpan(text.strip(), style=ft.TextStyle(color=ft.Colors.WHITE))
-                                ],
-                                size=18
-                            )
-                        ],
-                        alignment=ft.MainAxisAlignment.START
-                    )
-                )
-                page.update()
-            else:
-                # فقط اطلاع بده که پیام اومده
-                print(f"🔔 پیام جدید از {sender}")
-                # یا مثلاً یه نوتیف گرافیکی بذار کنار اسمش در contact
-                # contact_instance.show_notification(sender)
-        except Exception as e:
-            print("⚠️ خطا در گوش دادن به پیام‌ها:", e)
-            break
-        
 
 def send_control(sock, data: dict):
     """Send a JSON control message with a fixed header length"""
@@ -147,37 +108,65 @@ def connect_to_server(username):
     print("connected")
     return client
 
-def recv_loop(self):
+def show_message(msg):       
+        sender = msg["username"]
+        username_span_text = f"{sender}: "
+        text = msg["text"]
+
+        text_style = ft.TextStyle(size=16, color=ft.Colors.BLUE_GREY_100, italic=True)
+        alignment = ft.MainAxisAlignment.START
+
+        chat_list_view.controls.append(
+                ft.Row(
+                    [
+                        ft.Text(
+                            spans=[
+                                ft.TextSpan(username_span_text, style=text_style),
+                                ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
+                            ],
+                            size=18
+                        )
+                    ],
+                    alignment=alignment # Align messages based on sender
+                )
+            )
+        
+
+def recv_loop(client, page):
+    global RUNNING
+    global current_recipient
+
     try:
-        while RUNNING:
-            msg = recv_control(self.client)
-            if current_recipient == msg["username"]:
-                
-                if msg["type"] == "PMSG_RECV":
-                    
-                if msg["type"] == "MSG":
-                    self.show_msg(f"{msg['username']}: {msg['text']}")
-                elif msg["type"] == "USER_JOIN":
-                    self.show_msg(f"[{msg['username']} joined]")
-                elif msg["type"] == "USER_LEFT":
-                    self.show_msg(f"[{msg['username']} left]")
-                elif msg["type"] == "SERVER_CLOSE": 
-                    self.show_msg(f"[SERVER]: {msg.get('message', 'Server has closed.')}")
-                    break
-                elif msg["type"] == "ERROR":
-                    self.show_msg("[Error: " + msg.get("message","") + "]")
+        while True:
+            msg = recv_control(client)
+            print(msg)
+            print(current_recipient)
+            if msg["type"] == "PMSG_RECV":
+                if current_recipient == msg["username"]:
+                    print("in the loop:",msg)
+                    show_message(msg)
+                    page.update()
+
+
+                # if msg["type"] == "MSG":
+                #     self.show_msg(f"{msg['username']}: {msg['text']}")
+                # elif msg["type"] == "USER_JOIN":
+                #     self.show_msg(f"[{msg['username']} joined]")
+                # elif msg["type"] == "USER_LEFT":
+                #     self.show_msg(f"[{msg['username']} left]")
+                # elif msg["type"] == "SERVER_CLOSE": 
+                #     self.show_msg(f"[SERVER]: {msg.get('message', 'Server has closed.')}")
+                #     break
+                # elif msg["type"] == "ERROR":
+                #     self.show_msg("[Error: " + msg.get("message","") + "]")
     except socket.error as e:
         if RUNNING:
-            self.show_msg("[CONNECTION LOST] Admin panel connection to server closed unexpectedly.")
+            print("[CONNECTION LOST] Admin panel connection to server closed unexpectedly.")
     except Exception as e:
-        print("Error in admin recv loop:", e)
+        print("Error in user recv loop:", e)
     finally:
-        RUNNING = False
-        # در صورت خروج غیرعادی، تلاش می‌کنیم سوکت را ببندیم
-        try:
-            self.client.close()
-        except:
-            pass
+        RUNNING = False 
+        pass
 
 class contact:
     def __init__(self,page, name, image_path):
@@ -185,6 +174,9 @@ class contact:
         self.name = name
         self.image_path = image_path
         self.current_user = self.page.session.get("current_username")
+        global current_recipient
+        current_recipient = None
+
         # self.current_user = "sadra"
 
         self.container = ft.Container(
@@ -270,22 +262,9 @@ class contact:
                 send_button.disabled = False
                 select_file_button.disabled = False
 
-    def show_message(self,msg):
+    
+    
 
-        chat_list_view.controls.append(
-                ft.Row(
-                    [
-                        ft.Text(
-                            spans=[
-                                ft.TextSpan(self.current_user, style=text_style),
-                                ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
-                            ],
-                            size=18
-                        )
-                    ],
-                    alignment=alignment # Align messages based on sender
-                )
-            )
 
 def user_chat(page):
     global chat_list_view
@@ -306,18 +285,25 @@ def user_chat(page):
             send_control(client, {"type": "PMSG","username": username, "recipient":recipient, "text": msg.strip()})
 
     def show_messege(msg):
-  
-        username_span = f"- {username}: "
+        text_style = ft.TextStyle(size=16, color="#787878", italic=True)
+        alignment = ft.MainAxisAlignment.END
+
+        username_span_text = f"{username}: "
         
         chat_list_view.controls.append(
-            ft.Text(
-                spans=[
-                    ft.TextSpan(username_span, style= ft.TextStyle(size=16, color="#787878", italic=True)),
-                    ft.TextSpan(msg)
+                ft.Row(
+                    [
+                        ft.Text(
+                            spans=[
+                                ft.TextSpan(username_span_text, style=text_style),
+                                ft.TextSpan(msg, style=ft.TextStyle(color=ft.Colors.WHITE))
+                            ],
+                            size=18
+                        )
                     ],
-                    size=18
-                    )
+                    alignment=alignment # Align messages based on sender
                 )
+            )
         text_input.value = ""
 
         page.update()
@@ -406,6 +392,8 @@ def user_chat(page):
         print(contact_container)
         main_container.content.controls.append(contact_container)
 
+    recv_msg_thread = threading.Thread(target=recv_loop, args=(client,page))
+    recv_msg_thread.start()
 
     #on closing the program
     def on_app_close(e):
@@ -420,7 +408,7 @@ def user_chat(page):
 
     page.window.prevent_close = True
     page.window.on_event = on_app_close
-        
+    
     return ft.View(
         "/main",
         [
