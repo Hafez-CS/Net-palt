@@ -61,6 +61,8 @@ class ChatServer:
                 files.append({"filename": filename, "filesize": os.path.getsize(filepath)})
         return files
     
+    def request_get_all_users(self):
+        print(models.get_all_users_db())
     #users that are online!
     def get_all_users_with_status(self):
         all_db_users = models.get_all_users_db() 
@@ -160,7 +162,9 @@ class ChatServer:
 
         print("[PM] Message added to DB.")
 
-
+    def request_get_historical_messages_db(self, current_user, name):
+        models.init_db()
+        models.get_historical_messages_db(current_user, name)
 
     def broadcast_admin(self, message):
         self.broadcast_message(message, "ADMIN")
@@ -213,6 +217,10 @@ class ChatServer:
             while True:
                 msg = recv_control(client_socket)
                 
+                if msg["type"] == "GetAllUser":
+                    self.request_get_all_users()
+                    continue
+
                 if msg["type"] == "get_status":
                     self.check_status(msg["admin_username"], msg["username"])
 

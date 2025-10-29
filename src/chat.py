@@ -6,7 +6,7 @@ import json
 import os
 import time
 
-HOST = "127.0.0.1"
+HOST = "192.168.43.213"
 PORT = 5001
 RUNNING = False 
 DOWNLOAD_DIR = "downloaded/"
@@ -18,11 +18,21 @@ def setup_download_directory(directory_name):
     else:
         print(f"[CLIENT] Download directory '{directory_name}' found.")
 
-def get_all_users():
-    models.init_db()
-    users = models.get_all_users_db()
-    return users
+def connect_to_server(username):
+    #networking 
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((HOST, PORT))
+    # Introduce to server
+    send_control(client, {"type": "HELLO", "username": username})
+    RUNNING = True
+    # threading.Thread(target=recv_loop, daemon=True).start()
+    print("connected")
+    return client
 
+
+def get_all_users(client, username):
+    request_msg = {"type": "GetAllUser", "username": username}
+    send_control(sock=client, data=request_msg)
 
 
 def send_control(sock, data: dict):
@@ -47,66 +57,6 @@ def recv_control(sock):
     length = int(header.decode('utf-8'))
     j = recv_all(sock, length)
     return json.loads(j.decode('utf-8'))
-
-# def recv_loop(self):
-    try:
-        while self.running:
-            msg = recv_control(self.client)
-
-            if msg["type"] == "MSG":
-                self.after(0, self.show_msg, f"{msg['username']}: {msg['text']}")
-            elif msg["type"] == "USER_JOIN":
-                self.after(0, self.show_msg, f"[{msg['username']} joined]")
-            elif msg["type"] == "USER_LEFT":
-                self.after(0, self.show_msg, f"[{msg['username']} left]")
-            elif msg["type"] == "FILE_NOTICE":
-                self.after(0, self.show_msg, f"[{msg['username']} uploaded file: {msg['filename']}]")
-            elif msg["type"] == "FILE_LIST":
-                self.after(0, self.update_file_list, msg["files"])
-            elif msg["type"] == "FILE_SEND":
-                filename = msg["filename"]
-                filesize = int(msg["filesize"])
-                
-                self.after(0, self.show_msg, f"[Receiving file: {filename} ({filesize} bytes)...]")
-                
-                file_data = recv_all(self.client, filesize)
-                setup_download_directory(DOWNLOAD_DIR) 
-                with open(DOWNLOAD_DIR + filename, "wb") as f:
-                    f.write(file_data)
-                
-                self.after(0, self.show_msg, f"[Downloaded file: {filename}]")
-            
-            elif msg["type"] == "KICKED":
-                self.after(0, self.show_msg, f"[SERVER]: {msg.get('message', 'You were disconnected by the admin.')}")
-                self.after(0, self.on_close, True)
-                break
-            elif msg["type"] == "SERVER_CLOSE":
-                self.after(0, self.show_msg, f"[SERVER]: {msg.get('message', 'Server has closed.')}")
-                self.after(0, self.on_close, True)
-                break
-            
-            elif msg["type"] == "ERROR":
-                self.after(0, self.show_msg, "[Error: " + msg.get("message","") + "]")
-    except ConnectionError:
-        self.after(0, self.show_msg, "[CONNECTION LOST] Server connection closed.")
-    except Exception as e:
-        print("Error in recv loop:", e)
-        self.after(0, self.show_msg, "[ERROR] An unexpected error occurred.")
-    finally:
-            if self.running:
-                self.after(0, self.on_close, True)
-
-
-def connect_to_server(username):
-    #networking 
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((HOST, PORT))
-    # Introduce to server
-    send_control(client, {"type": "HELLO", "username": username})
-    RUNNING = True
-    # threading.Thread(target=recv_loop, daemon=True).start()
-    print("connected")
-    return client
 
 def show_message(msg):       
         sender = msg["username"]
@@ -271,7 +221,7 @@ def user_chat(page):
     global text_input
     global send_button
     global select_file_button
-
+    global username
 
     username = page.session.get("current_username")
     # username = "sadra"
@@ -384,7 +334,7 @@ def user_chat(page):
 
     )
 
-    users = get_all_users()
+    users = get_all_users(client, username)
 
     for user in users:
         user = contact(page, user, "assets/profile.png")
@@ -438,7 +388,8 @@ def user_chat(page):
             ft.Row(controls=[
                 main_container,
                 chat_container,
-                ft.Container(all_tabs)]
+                # ft.Container(all_tabs)
+                ]
 
             )
         ],
