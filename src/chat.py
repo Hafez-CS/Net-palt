@@ -96,7 +96,8 @@ def recv_loop(client, page):
                     print("in the loop:",msg)
                     show_message(msg)
                     page.update()
-
+            if msg["type"] == "RecAllUser":
+                update_contacts_ui(page, client, msg["text"])
 
                 # if msg["type"] == "MSG":
                 #     self.show_msg(f"{msg['username']}: {msg['text']}")
@@ -214,6 +215,18 @@ class contact:
 
     
     
+def update_contacts_ui(page, client, users):
+    global main_container
+
+    get_all_users(client, username)
+
+    for user in users:
+        user = contact(page, user, "assets/profile.png")
+        contact_container = user.container
+        print(contact_container)
+        main_container.content.controls.append(contact_container)
+        
+    page.update()
 
 
 def user_chat(page):
@@ -222,6 +235,8 @@ def user_chat(page):
     global send_button
     global select_file_button
     global username
+    global main_container
+
 
     username = page.session.get("current_username")
     # username = "sadra"
@@ -334,13 +349,6 @@ def user_chat(page):
 
     )
 
-    users = get_all_users(client, username)
-
-    for user in users:
-        user = contact(page, user, "assets/profile.png")
-        contact_container = user.container
-        print(contact_container)
-        main_container.content.controls.append(contact_container)
 
     print("before tab")
     tabs = [

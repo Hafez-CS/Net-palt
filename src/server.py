@@ -61,8 +61,31 @@ class ChatServer:
                 files.append({"filename": filename, "filesize": os.path.getsize(filepath)})
         return files
     
-    def request_get_all_users(self):
-        print(models.get_all_users_db())
+    def request_get_all_users(self, username):
+        self.send_get_all_users(msg=models.get_all_users_db(), recipient=username )
+
+    def send_get_all_users(self, msg, recipient):
+        users_with_status = self.get_all_users_with_status()
+        recipient_socket = None
+        with self.lock:
+            recipient_socket = self.clients.get(recipient)
+
+        # 2. If online, attempt to send the message over the socket
+        if recipient_socket:
+            print(f"Attempting to send users list to {recipient}")
+            
+            try:
+                msg = {"type": "RecAllUser", "username": "server", "text": msg}
+                send_control(recipient_socket, msg)
+                print(f"[PM] Message delivered to online user: {recipient}")
+            except:
+                # If sending failed, the user might have just disconnected.
+                # The handle_client loop will eventually clean this up, 
+                # but we can also trigger a cleanup here.
+                print(f"[PM] Failed to send message to {recipient}. Marking as offline.")
+                # We will rely on the main thread/loop to eventually call remove_client. 
+                # For a private message, we just log it as is.
+
     #users that are online!
     def get_all_users_with_status(self):
         all_db_users = models.get_all_users_db() 
@@ -218,7 +241,7 @@ class ChatServer:
                 msg = recv_control(client_socket)
                 
                 if msg["type"] == "GetAllUser":
-                    self.request_get_all_users()
+                    self.request_get_all_users(username=msg["username"])
                     continue
 
                 if msg["type"] == "get_status":
