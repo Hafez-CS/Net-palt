@@ -392,6 +392,29 @@ def user_chat(page):
         print(contact_container)
         main_container.content.controls.append(contact_container)
 
+    print("before tab")
+    tabs = [
+        ft.Tab(
+            text="Contacts",
+            content=ft.Container(
+                ft.Text("hello"),
+                ft.Text("im here"),
+            )
+        ),
+    ]
+
+    all_tabs = ft.Tabs(
+        selected_index=0,
+        animation_duration=300,
+        tabs=tabs,
+        scrollable=True,
+
+    ) 
+
+    print("after tab")
+
+
+
     recv_msg_thread = threading.Thread(target=recv_loop, args=(client,page))
     recv_msg_thread.start()
 
@@ -414,7 +437,8 @@ def user_chat(page):
         [
             ft.Row(controls=[
                 main_container,
-                chat_container]
+                chat_container,
+                ft.Container(all_tabs)]
 
             )
         ],
