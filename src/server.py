@@ -53,6 +53,24 @@ class ChatServer:
 
         self.available_files = self._get_file_list_from_dir() 
 
+    def autenticate_user(self, username, password):
+        _, hashed_password, role = models.get_user_by_username(username)
+        if models.check_password_hash(password, hashed_password):
+            print("login success")
+            type = "LOGIN_SUCCESS"
+            msg = {
+                "user": username,
+                "role": role
+            }
+        else:
+            type = "LOGIN_FAILURE"
+            msg = {
+                "user": username,
+            }
+
+        self.send_private_update(msg, "login"+username, type)
+
+
     def _get_file_list_from_dir(self):
         files = []
         for filename in os.listdir(self.files_dir):
@@ -61,6 +79,36 @@ class ChatServer:
                 files.append({"filename": filename, "filesize": os.path.getsize(filepath)})
         return files
     
+    def request_get_historical_messages_db(self, user1, user2):
+        messages = models.get_historical_messages_db(user1, user2)
+        self.send_private_update(messages, user1, type="RECV_HISTORY")
+
+
+    def request_get_all_users(self, username):
+        self.send_private_update(msg=models.get_all_users_db(), recipient=username, type="RecAllUser")
+
+    def send_private_update(self, msg, recipient, type):
+        users_with_status = self.get_all_users_with_status()
+        recipient_socket = None
+        with self.lock:
+            recipient_socket = self.clients.get(recipient)
+
+        # 2. If online, attempt to send the message over the socket
+        if recipient_socket:
+            print(f"Attempting to send users update to {recipient}")
+            
+            try:
+                msg = {"type": type, "username": "server", "text": msg}
+                send_control(recipient_socket, msg)
+                print(f"[PM] Message delivered to online user: {recipient}")
+            except:
+                # If sending failed, the user might have just disconnected.
+                # The handle_client loop will eventually clean this up, 
+                # but we can also trigger a cleanup here.
+                print(f"[PM] Failed to send message to {recipient}. Marking as offline.")
+                # We will rely on the main thread/loop to eventually call remove_client. 
+                # For a private message, we just log it as is.
+
     #users that are online!
     def get_all_users_with_status(self):
         all_db_users = models.get_all_users_db() 
@@ -85,8 +133,6 @@ class ChatServer:
         online_set = set(self.clients.keys())
         # if username in online_set:
             
-
-
     def kick_by_username(self, username_to_kick):
         with self.lock:
             client_socket = self.clients.get(username_to_kick)
@@ -94,29 +140,26 @@ class ChatServer:
             if client_socket:
                 kicked_successfully = False
                 try:
-                    # 1. ارسال پیام کیک
+                    # sending kick message
                     send_control(client_socket, {"type": "KICKED", "message": "You have been kicked by the admin."})
                     
-                    # 2. قطع سوکت و بستن آن
-                    time.sleep(0.1) # یک مکث کوتاه برای اطمینان از ارسال پیام
+                    # closing the socket
+                    time.sleep(0.1) 
                     client_socket.shutdown(socket.SHUT_RDWR)
                     client_socket.close()
                     kicked_successfully = True
 
                 except Exception as e:
-                    # اگر در فرآیند ارسال پیام یا بستن سوکت خطا رخ دهد
                     print(f"[SERVER ERROR] Error during socket closure for {username_to_kick}: {e}")
                     
                 finally:
-                    # 3. حذف از لیست سرور (مهمترین قسمت برای رفع فریز)
+                    #removing from list
                     if username_to_kick in self.clients:
                         del self.clients[username_to_kick]
-                        self.broadcast_message(f"[{username_to_kick} was kicked by admin]", "SERVER")
+                        # self.broadcast_message(f"[{username_to_kick} was kicked by admin]", "SERVER")
                         print(f"[SERVER] Removed client {username_to_kick} from list.")
                         return True
         return False
-    
-    
            
     def send_private(self, msg, username, recipient):
         #check if the user is online
@@ -160,8 +203,6 @@ class ChatServer:
         )
 
         print("[PM] Message added to DB.")
-
-
 
     def broadcast_admin(self, message):
         self.broadcast_message(message, "ADMIN")
@@ -207,23 +248,34 @@ class ChatServer:
                     return
                 self.clients[username] = client_socket
 
-            if username != "admin": 
-                # self.broadcast_message(f"{username} joined", "SERVER")
-                send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
+            # if username != "admin": 
+            #     # self.broadcast_message(f"{username} joined", "SERVER")
+            #     send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
             
             while True:
                 msg = recv_control(client_socket)
                 
-                if msg["type"] == "get_status":
+                if msg["type"] == "LOGIN_REQUEST":
+                    self.autenticate_user(msg["username"], msg["password"])
+                    continue
+
+                elif msg["type"] == "GetAllUser":
+                    self.request_get_all_users(username=msg["username"])
+                    continue
+
+                elif msg["type"] == "get_status":
                     self.check_status(msg["admin_username"], msg["username"])
 
-                if msg["type"] == "PMSG":
+                elif msg["type"] == "GET_HISTORY":
+                    self.request_get_historical_messages_db(msg["user1"], msg["user2"])
+
+                elif msg["type"] == "PMSG":
                     text = msg["text"]
                     sender = msg["username"]
                     recipient = msg["recipient"]
                     self.send_private(text, sender, recipient)
                     
-                if msg["type"] == "MSG":
+                elif msg["type"] == "MSG":
                     # اگر ادمین پیام فرستاده، نیاز به برودکست نیست، فقط برای نمایش در پنل ادمین
                     # if username == "admin": 
                     #     continue
@@ -256,11 +308,12 @@ class ChatServer:
                     else:
                         send_control(client_socket, {"type": "ERROR", "message": f"File {filename} not found on server."})
 
-                elif msg["type"] == "QUIT":
-                    break
-        
+                elif msg["type"] == "BYE":
+                     return
+                    
         except ConnectionError:
             pass 
+
         except Exception as e:
             print(f"[SERVER ERROR] Error handling client {username}: {e}")
             

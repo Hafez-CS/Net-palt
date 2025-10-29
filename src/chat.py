@@ -6,10 +6,15 @@ import json
 import os
 import time
 
+# HOST = "192.168.43.213"
 HOST = "127.0.0.1"
+
 PORT = 5001
 is_running = False 
 DOWNLOAD_DIR = "downloaded/"
+RELOAD = 2
+current_recipient = None
+
 
 def setup_download_directory(directory_name):
     if not os.path.exists(directory_name):
@@ -18,10 +23,38 @@ def setup_download_directory(directory_name):
     else:
         print(f"[CLIENT] Download directory '{directory_name}' found.")
 
-def get_all_users():
-    models.init_db()
-    users = models.get_all_users_db()
-    return users
+def connect_to_server(username):
+    global is_running
+    #networking 
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((HOST, PORT))
+    # Introduce to server
+    send_control(client, {"type": "HELLO", "username": username})
+    is_running = True
+    # threading.Thread(target=recv_loop, daemon=True).start()
+    print("connected")
+    return client
+
+def get_historical_messages(user1, user2):
+    global client
+    msg = {
+        "type": "GET_HISTORY",
+        "user1": user1,
+        "user2": user2,
+    }
+    try:
+        send_control(client, msg)
+    except Exception as e:
+        print(f"something went wrong in get_historical_messages: {e}")
+
+
+def get_all_users(client, username):
+    global is_running
+
+    while is_running:
+        request_msg = {"type": "GetAllUser", "username": username}
+        send_control(sock=client, data=request_msg)
+        time.sleep(RELOAD)
 
 def send_control(sock, data: dict):
     """Send a JSON control message with a fixed header length"""
@@ -46,66 +79,67 @@ def recv_control(sock):
     j = recv_all(sock, length)
     return json.loads(j.decode('utf-8'))
 
-# def recv_loop(self):
+def show_message(msg):       
+        sender = msg["username"]
+        username_span_text = f"{sender}: "
+        text = msg["text"]
+
+        text_style = ft.TextStyle(size=16, color=ft.Colors.BLUE_GREY_100, italic=True)
+        alignment = ft.MainAxisAlignment.START
+
+        chat_list_view.controls.append(
+                ft.Row(
+                    [
+                        ft.Text(
+                            spans=[
+                                ft.TextSpan(username_span_text, style=text_style),
+                                ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
+                            ],
+                            size=18
+                        )
+                    ],
+                    alignment=alignment # Align messages based on sender
+                )
+            )
+        
+
+def recv_loop(client, page):
+    global is_running
+    global current_recipient
+
     try:
-        while self.running:
-            msg = recv_control(self.client)
+        while is_running:
+            msg = recv_control(client)
+            if msg["type"] == "PMSG_RECV":
+                if current_recipient == msg["username"]:
+                    show_message(msg)
+                    page.update()
+        
+            elif msg["type"] == "RecAllUser":
+                update_contacts_ui(page, msg["text"])
 
-            if msg["type"] == "MSG":
-                self.after(0, self.show_msg, f"{msg['username']}: {msg['text']}")
-            elif msg["type"] == "USER_JOIN":
-                self.after(0, self.show_msg, f"[{msg['username']} joined]")
-            elif msg["type"] == "USER_LEFT":
-                self.after(0, self.show_msg, f"[{msg['username']} left]")
-            elif msg["type"] == "FILE_NOTICE":
-                self.after(0, self.show_msg, f"[{msg['username']} uploaded file: {msg['filename']}]")
-            elif msg["type"] == "FILE_LIST":
-                self.after(0, self.update_file_list, msg["files"])
-            elif msg["type"] == "FILE_SEND":
-                filename = msg["filename"]
-                filesize = int(msg["filesize"])
-                
-                self.after(0, self.show_msg, f"[Receiving file: {filename} ({filesize} bytes)...]")
-                
-                file_data = recv_all(self.client, filesize)
-                setup_download_directory(DOWNLOAD_DIR) 
-                with open(DOWNLOAD_DIR + filename, "wb") as f:
-                    f.write(file_data)
-                
-                self.after(0, self.show_msg, f"[Downloaded file: {filename}]")
-            
-            elif msg["type"] == "KICKED":
-                self.after(0, self.show_msg, f"[SERVER]: {msg.get('message', 'You were disconnected by the admin.')}")
-                self.after(0, self.on_close, True)
-                break
-            elif msg["type"] == "SERVER_CLOSE":
-                self.after(0, self.show_msg, f"[SERVER]: {msg.get('message', 'Server has closed.')}")
-                self.after(0, self.on_close, True)
-                break
-            
-            elif msg["type"] == "ERROR":
-                self.after(0, self.show_msg, "[Error: " + msg.get("message","") + "]")
-    except ConnectionError:
-        self.after(0, self.show_msg, "[CONNECTION LOST] Server connection closed.")
+            elif msg["type"] == "RECV_HISTORY":
+                update_user_messages(page, msg["text"])
+
+                # if msg["type"] == "MSG":
+                #     self.show_msg(f"{msg['username']}: {msg['text']}")
+                # elif msg["type"] == "USER_JOIN":
+                #     self.show_msg(f"[{msg['username']} joined]")
+                # elif msg["type"] == "USER_LEFT":
+                #     self.show_msg(f"[{msg['username']} left]")
+                # elif msg["type"] == "SERVER_CLOSE": 
+                #     self.show_msg(f"[SERVER]: {msg.get('message', 'Server has closed.')}")
+                #     break
+                # elif msg["type"] == "ERROR":
+                #     self.show_msg("[Error: " + msg.get("message","") + "]")
+    except socket.error as e:
+        if is_running:
+            print("[CONNECTION LOST] Admin panel connection to server closed unexpectedly.")
     except Exception as e:
-        print("Error in recv loop:", e)
-        self.after(0, self.show_msg, "[ERROR] An unexpected error occurred.")
+        print("Error in user recv loop:", e)
     finally:
-            if self.running:
-                self.after(0, self.on_close, True)
-
-
-def connect_to_server(username):
-    #networking 
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((HOST, PORT))
-    # Introduce to server
-    send_control(client, {"type": "HELLO", "username": username})
-    is_running = True
-    # threading.Thread(target=recv_loop, daemon=True).start()
-    print("connected")
-    return client
-
+        is_running = False 
+        pass
 
 class contact:
     def __init__(self,page, name, image_path):
@@ -113,6 +147,8 @@ class contact:
         self.name = name
         self.image_path = image_path
         self.current_user = self.page.session.get("current_username")
+        
+
         # self.current_user = "sadra"
 
         self.container = ft.Container(
@@ -148,47 +184,12 @@ class contact:
         chat_list_view.controls.append(
             ft.Text(f" -- Chat With {self.name} -- ", size=20, weight=ft.FontWeight.BOLD)
         )
-        
-        messages = models.get_historical_messages_db(self.current_user, self.name)
-        
-        # 5. Display the loaded messages
-        for msg in messages:
-            sender = msg["sender"]
-            text = msg["text"]
-            
-            # Format the message for the chat window
-            is_current_user_message = (sender == self.current_user)
-            
-            # Use the existing show_messege logic for consistency, 
-            # or define a simple display logic here
-            
-            username_span_text = f"{sender}: "
-            if is_current_user_message:
-                # Align to the right and use a different style for self-sent messages
-                text_style = ft.TextStyle(size=16, color="#787878", italic=True)
-                alignment = ft.MainAxisAlignment.END
-            else:
-                # Align to the left for messages from the contact
-                text_style = ft.TextStyle(size=16, color=ft.Colors.BLUE_GREY_100, italic=True)
-                alignment = ft.MainAxisAlignment.START
 
-            chat_list_view.controls.append(
-                ft.Row(
-                    [
-                        ft.Text(
-                            spans=[
-                                ft.TextSpan(username_span_text, style=text_style),
-                                ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
-                            ],
-                            size=18
-                        )
-                    ],
-                    alignment=alignment # Align messages based on sender
-                )
-            )
-
-        
         self.page.update()
+
+        get_historical_messages(self.current_user, self.name)
+        
+        
 
     def unlock_input(self):
             if text_input.disabled and send_button.disabled and select_file_button.disabled:
@@ -196,13 +197,71 @@ class contact:
                 send_button.disabled = False
                 select_file_button.disabled = False
 
+    
+    
+def update_contacts_ui(page, users):
+    global main_container
+
+    main_container.content.controls.clear()
+
+    for user in users:
+        user = contact(page, user, "assets/profile.png")
+        contact_container = user.container
+        main_container.content.controls.append(contact_container)
+        
+    page.update()
+    print("cantacts are reloaded!")
+
+def update_user_messages(page, messages):
+
+    # 5. Display the loaded messages
+    for msg in messages:
+        sender = msg["sender"]
+        text = msg["text"]
+        
+        # Format the message for the chat window
+        is_current_user_message = (sender == username)
+        
+        # Use the existing show_messege logic for consistency, 
+        # or define a simple display logic here
+        
+        username_span_text = f"{sender}: "
+        if is_current_user_message:
+            # Align to the right and use a different style for self-sent messages
+            text_style = ft.TextStyle(size=16, color="#787878", italic=True)
+            alignment = ft.MainAxisAlignment.END
+        else:
+            # Align to the left for messages from the contact
+            text_style = ft.TextStyle(size=16, color=ft.Colors.BLUE_GREY_100, italic=True)
+            alignment = ft.MainAxisAlignment.START
+
+        chat_list_view.controls.append(
+            ft.Row(
+                [
+                    ft.Text(
+                        spans=[
+                            ft.TextSpan(username_span_text, style=text_style),
+                            ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
+                        ],
+                        size=18
+                    )
+                ],
+                alignment=alignment # Align messages based on sender
+            )
+        )
+
+    
+    page.update()
+
 
 def user_chat(page):
     global chat_list_view
     global text_input
     global send_button
     global select_file_button
-
+    global username
+    global main_container
+    global client
 
     username = page.session.get("current_username")
     # username = "sadra"
@@ -216,18 +275,25 @@ def user_chat(page):
             send_control(client, {"type": "PMSG","username": username, "recipient":recipient, "text": msg.strip()})
 
     def show_messege(msg):
-  
-        username_span = f"- {username}: "
+        text_style = ft.TextStyle(size=16, color="#787878", italic=True)
+        alignment = ft.MainAxisAlignment.END
+
+        username_span_text = f"{username}: "
         
         chat_list_view.controls.append(
-            ft.Text(
-                spans=[
-                    ft.TextSpan(username_span, style= ft.TextStyle(size=16, color="#787878", italic=True)),
-                    ft.TextSpan(msg)
+                ft.Row(
+                    [
+                        ft.Text(
+                            spans=[
+                                ft.TextSpan(username_span_text, style=text_style),
+                                ft.TextSpan(msg, style=ft.TextStyle(color=ft.Colors.WHITE))
+                            ],
+                            size=18
+                        )
                     ],
-                    size=18
-                    )
+                    alignment=alignment # Align messages based on sender
                 )
+            )
         text_input.value = ""
 
         page.update()
@@ -308,13 +374,35 @@ def user_chat(page):
 
     )
 
-    users = get_all_users()
 
-    for user in users:
-        contact_container = contact(page, user, "assets/profile.png").container
-        print(contact_container)
-        main_container.content.controls.append(contact_container)
+    print("before tab")
+    tabs = [
+        ft.Tab(
+            text="Contacts",
+            content=ft.Container(
+                ft.Text("hello"),
+                ft.Text("im here"),
+            )
+        ),
+    ]
 
+    all_tabs = ft.Tabs(
+        selected_index=0,
+        animation_duration=300,
+        tabs=tabs,
+        scrollable=True,
+
+    ) 
+
+    print("after tab")
+
+
+
+    recv_msg_thread = threading.Thread(target=recv_loop, args=(client,page))
+    recv_msg_thread.start()
+
+    updata_user_thread = threading.Thread(target=get_all_users, args=(client, username))
+    updata_user_thread.start()
 
     #on closing the program
     def on_app_close(e):
@@ -329,13 +417,15 @@ def user_chat(page):
 
     page.window.prevent_close = True
     page.window.on_event = on_app_close
-        
+    
     return ft.View(
         "/main",
         [
             ft.Row(controls=[
                 main_container,
-                chat_container]
+                chat_container,
+                # ft.Container(all_tabs)
+                ]
 
             )
         ],

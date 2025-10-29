@@ -4,8 +4,11 @@ import bcrypt
 import os
 import time
 
+current_dir = os.getcwd()
 
-DB_FILE = "chat_app.db"
+# Join the CWD with the file name
+DB_FILE = os.path.join(current_dir, 'chat_app.db')
+
 ADMIN_USERNAME = "admin"
 # پسورد پیش‌فرض ادمین را اینجا تعیین کنید
 ADMIN_PASSWORD = "admin_password" 

@@ -1,5 +1,38 @@
 import flet as ft
 import models
+import socket
+import json 
+
+HOST = "127.0.0.1"
+# HOST = "192.168.43.213"
+PORT = 5001
+user_admin = {
+    "username" : "admin",
+    "password" : "admin"
+}
+
+def send_control(sock, data: dict):
+    """Send a JSON control message with a fixed header length"""
+    j = json.dumps(data).encode('utf-8')
+    header = f"{len(j):010d}".encode('utf-8')
+    sock.sendall(header + j)
+
+def recv_all(sock, n):
+    """Receive exactly n bytes"""
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("Connection closed")
+        buf.extend(chunk)
+    return bytes(buf)
+
+def recv_control(sock):
+    """Receive a JSON control message"""
+    header = recv_all(sock, 10)
+    length = int(header.decode('utf-8'))
+    j = recv_all(sock, length)
+    return json.loads(j.decode('utf-8'))
 
 def login_view(page):
     """Creates the login screen View."""
@@ -8,42 +41,102 @@ def login_view(page):
     page.window_resizable = False
     
     def autenticate_user(e):
-        user_data = models.get_user_by_username(username.value)
 
-        if username.value and password.value:
-            if user_data:
-                _, stored_password_hash, role = user_data
-                if models.check_password_hash(password.value, stored_password_hash):
-                    #storing the username
-                    page.session.set("current_username", username.value)
-                    if role == "user":
-                        page.go("/main") 
-                    elif role == "admin":
-                        page.go("/admin")
-                    
-                else:
-                    error = ft.AlertDialog(
-                        title=ft.Text("Wrong Password"),
-                        content=ft.Text("The password you entered is incorrect. Please try again."),
-                        alignment=ft.alignment.center
-                    )
-                    page.open(error)
-            else:
-                error = ft.AlertDialog(
-                title=ft.Text("user not found!"),
-                content=ft.Text("the username you entered does not exist. please try again."),
-                alignment=ft.alignment.center
-                )
+        input_username = username.value 
+        input_password = password.value
 
-                page.open(error)
-        else:
+        if not input_username or input_password:
             error = ft.AlertDialog(
                 title=ft.Text("empty fiealds"),
                 content=ft.Text("please fill the fields and try again."),
                 alignment=ft.alignment.center
                 )
-
             page.open(error)
+
+        if input_username == "admin" and input_password == "admin":
+            page.go("/admin")
+            
+        login_client_socket = None
+        
+        try:
+            login_client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            login_client_socket.connect((HOST, PORT))
+            hello_msg = {
+                "type": "HELLO",
+                "username": "login" + input_username
+            }
+            send_control(login_client_socket, hello_msg)
+
+            # 2. آماده‌سازی پیام احراز هویت
+            login_request = {
+                "type": "LOGIN_REQUEST",
+                "username": input_username,
+                "password": input_password # توجه: ارسال رمز عبور به صورت ساده امن نیست، اما برای تست اولیه قابل استفاده است.
+            }
+
+            # 3. ارسال درخواست به سرور
+            send_control(login_client_socket, login_request)
+
+            # 4. دریافت پاسخ از سرور
+            response = recv_control(login_client_socket)
+            msg = response["text"]
+            # 5. پردازش پاسخ
+            if response.get("type") == "LOGIN_SUCCESS":
+                user_role = msg["role"]
+                
+                # ذخیره نام کاربری و هدایت به صفحه اصلی
+                page.session.set("current_username", input_username)
+                if user_role == "user":
+                    print("in page go")
+                    page.go("/main")
+                elif user_role == "admin":
+                    page.go("/admin")
+                    
+            elif response.get("type") == "LOGIN_FAILURE":
+                # سرور پاسخ داده که احراز هویت شکست خورده (نام کاربری یا رمز عبور اشتباه است)
+                error_message = response.get("message", "Incorrect username or password.")
+                error = ft.AlertDialog(
+                    title=ft.Text("Login Failed"),
+                    content=ft.Text(error_message),
+                    alignment=ft.alignment.center
+                )
+                page.open(error)
+
+            else:
+                # پاسخ غیرمنتظره از سرور
+                error = ft.AlertDialog(
+                    title=ft.Text("Server Error"),
+                    content=ft.Text("Received an unexpected response from the server."),
+                    alignment=ft.alignment.center
+                )
+                page.open(error)
+
+        except ConnectionRefusedError:
+            error = ft.AlertDialog(
+                title=ft.Text("Connection Error"),
+                content=ft.Text("Could not connect to the chat server."),
+                alignment=ft.alignment.center
+            )
+            page.open(error)
+
+        except Exception as e:
+            error = ft.AlertDialog(
+                title=ft.Text("An Error Occurred"),
+                content=ft.Text(f"An error occurred during login: {e}"),
+                alignment=ft.alignment.center
+            )
+            page.open(error)
+
+        finally:
+            # 6. بستن سوکت موقت (اگر باز است)
+            if login_client_socket:
+                # ارسال پیام خداحافظی به سرور قبل از بستن
+                try:
+                    send_control(login_client_socket, {"type": "BYE", "username": input_username})
+                except:
+                    pass # اگر سوکت مشکل دارد، مهم نیست
+                login_client_socket.close()
+
 
 
     username = ft.TextField(label="Username", width=300, icon=ft.Icons.EMAIL)
