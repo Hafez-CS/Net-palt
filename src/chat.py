@@ -8,8 +8,11 @@ import time
 
 HOST = "192.168.43.213"
 PORT = 5001
-RUNNING = False 
+is_running = False 
 DOWNLOAD_DIR = "downloaded/"
+RELOAD = 5
+current_recipient = None
+
 
 def setup_download_directory(directory_name):
     if not os.path.exists(directory_name):
@@ -19,20 +22,25 @@ def setup_download_directory(directory_name):
         print(f"[CLIENT] Download directory '{directory_name}' found.")
 
 def connect_to_server(username):
+    global is_running
     #networking 
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect((HOST, PORT))
     # Introduce to server
     send_control(client, {"type": "HELLO", "username": username})
-    RUNNING = True
+    is_running = True
     # threading.Thread(target=recv_loop, daemon=True).start()
     print("connected")
     return client
 
 
 def get_all_users(client, username):
-    request_msg = {"type": "GetAllUser", "username": username}
-    send_control(sock=client, data=request_msg)
+    global is_running
+
+    while is_running:
+        request_msg = {"type": "GetAllUser", "username": username}
+        send_control(sock=client, data=request_msg)
+        time.sleep(RELOAD)
 
 
 def send_control(sock, data: dict):
@@ -83,11 +91,11 @@ def show_message(msg):
         
 
 def recv_loop(client, page):
-    global RUNNING
+    global is_running
     global current_recipient
 
     try:
-        while True:
+        while is_running:
             msg = recv_control(client)
             print(msg)
             print(current_recipient)
@@ -97,7 +105,7 @@ def recv_loop(client, page):
                     show_message(msg)
                     page.update()
             if msg["type"] == "RecAllUser":
-                update_contacts_ui(page, client, msg["text"])
+                update_contacts_ui(page, msg["text"])
 
                 # if msg["type"] == "MSG":
                 #     self.show_msg(f"{msg['username']}: {msg['text']}")
@@ -111,12 +119,12 @@ def recv_loop(client, page):
                 # elif msg["type"] == "ERROR":
                 #     self.show_msg("[Error: " + msg.get("message","") + "]")
     except socket.error as e:
-        if RUNNING:
+        if is_running:
             print("[CONNECTION LOST] Admin panel connection to server closed unexpectedly.")
     except Exception as e:
         print("Error in user recv loop:", e)
     finally:
-        RUNNING = False 
+        is_running = False 
         pass
 
 class contact:
@@ -125,8 +133,7 @@ class contact:
         self.name = name
         self.image_path = image_path
         self.current_user = self.page.session.get("current_username")
-        global current_recipient
-        current_recipient = None
+        
 
         # self.current_user = "sadra"
 
@@ -215,18 +222,18 @@ class contact:
 
     
     
-def update_contacts_ui(page, client, users):
+def update_contacts_ui(page, users):
     global main_container
 
-    get_all_users(client, username)
+    main_container.content.controls.clear()
 
     for user in users:
         user = contact(page, user, "assets/profile.png")
         contact_container = user.container
-        print(contact_container)
         main_container.content.controls.append(contact_container)
         
     page.update()
+    print("cantacts are reloaded!")
 
 
 def user_chat(page):
@@ -376,6 +383,8 @@ def user_chat(page):
     recv_msg_thread = threading.Thread(target=recv_loop, args=(client,page))
     recv_msg_thread.start()
 
+    updata_user_thread = threading.Thread(target=get_all_users, args=(client, username))
+    updata_user_thread.start()
     #on closing the program
     def on_app_close(e):
         if e.data == "close":
