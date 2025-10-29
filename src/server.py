@@ -53,6 +53,24 @@ class ChatServer:
 
         self.available_files = self._get_file_list_from_dir() 
 
+    def autenticate_user(self, username, password):
+        _, hashed_password, role = models.get_user_by_username(username)
+        if models.check_password_hash(password, hashed_password):
+            print("login success")
+            type = "LOGIN_SUCCESS"
+            msg = {
+                "user": username,
+                "role": role
+            }
+        else:
+            type = "LOGIN_FAILURE"
+            msg = {
+                "user": username,
+            }
+
+        self.send_private_update(msg, "login"+username, type)
+
+
     def _get_file_list_from_dir(self):
         files = []
         for filename in os.listdir(self.files_dir):
@@ -77,7 +95,7 @@ class ChatServer:
 
         # 2. If online, attempt to send the message over the socket
         if recipient_socket:
-            print(f"Attempting to send users list to {recipient}")
+            print(f"Attempting to send users update to {recipient}")
             
             try:
                 msg = {"type": type, "username": "server", "text": msg}
@@ -230,14 +248,18 @@ class ChatServer:
                     return
                 self.clients[username] = client_socket
 
-            if username != "admin": 
-                # self.broadcast_message(f"{username} joined", "SERVER")
-                send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
+            # if username != "admin": 
+            #     # self.broadcast_message(f"{username} joined", "SERVER")
+            #     send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
             
             while True:
                 msg = recv_control(client_socket)
                 
-                if msg["type"] == "GetAllUser":
+                if msg["type"] == "LOGIN_REQUEST":
+                    self.autenticate_user(msg["username"], msg["password"])
+                    continue
+
+                elif msg["type"] == "GetAllUser":
                     self.request_get_all_users(username=msg["username"])
                     continue
 
@@ -286,11 +308,12 @@ class ChatServer:
                     else:
                         send_control(client_socket, {"type": "ERROR", "message": f"File {filename} not found on server."})
 
-                elif msg["type"] == "QUIT":
-                    break
-        
+                elif msg["type"] == "BYE":
+                     return
+                    
         except ConnectionError:
             pass 
+
         except Exception as e:
             print(f"[SERVER ERROR] Error handling client {username}: {e}")
             

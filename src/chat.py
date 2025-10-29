@@ -403,7 +403,7 @@ def user_chat(page):
 
     updata_user_thread = threading.Thread(target=get_all_users, args=(client, username))
     updata_user_thread.start()
-    
+
     #on closing the program
     def on_app_close(e):
         if e.data == "close":
