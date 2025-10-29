@@ -325,6 +325,29 @@ def admin(page: ft.Page):
             # Explicitly Destroy the Flet Window
             page.window.destroy()
             print("Flet window destroyed.")
+    def check_items_clicked(e):
+        e.control.checked = not e.control.checked
+        page.update
+    pb = ft.PopupMenuButton(
+        items=[
+            ft.PopupMenuItem(text="Item 1"),
+            ft.PopupMenuItem(icon=ft.Icons.POWER_INPUT, text="Check power"),
+            ft.PopupMenuItem(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.HOURGLASS_TOP_OUTLINED),
+                        ft.Text("Item with a custom content"),
+                    ]
+                ),
+                on_click=lambda _: print("Button with custom content clicked!"),
+            ),
+            ft.PopupMenuItem(),  # divider
+            ft.PopupMenuItem(
+                text="Checked item", checked=False, on_click= check_items_clicked
+            ),
+        ]
+    )
+
 
     # task: adding a dialog error when server is not running and back to login screen!
     try:
@@ -457,11 +480,12 @@ def admin(page: ft.Page):
         appbar=ft.AppBar(
             title=ft.Text("پنل مدیریت (Admin) 🛠️", weight=ft.FontWeight.BOLD),
             center_title=True,
-            bgcolor=ft.colors.RED_900,  # diffrent color
+            bgcolor=ft.Colors.RED_900,  # diffrent color
             actions=[
+                pb,
                 ft.IconButton(
-                    icon=ft.icons.EXIT_TO_APP_ROUNDED,
-                    icon_color=ft.colors.WHITE,
+                    icon=ft.Icons.EXIT_TO_APP_ROUNDED,
+                    icon_color=ft.Colors.WHITE,
                     tooltip="بازگشت به صفحه‌ی ورود",
                     on_click=lambda e: page.go("/"), 
                 )
