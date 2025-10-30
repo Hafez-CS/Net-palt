@@ -3,8 +3,8 @@ import models
 import socket
 import json 
 
-HOST = "127.0.0.1"
-# HOST = "192.168.43.213"
+# HOST = "127.0.0.1"
+HOST = "192.168.43.213"
 PORT = 5001
 user_admin = {
     "username" : "admin",
@@ -55,7 +55,7 @@ def login_view(page):
 
         if input_username == "admin" and input_password == "admin":
             page.go("/admin")
-            
+
         login_client_socket = None
         
         try:

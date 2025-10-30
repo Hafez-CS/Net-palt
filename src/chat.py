@@ -6,8 +6,8 @@ import json
 import os
 import time
 
-# HOST = "192.168.43.213"
-HOST = "127.0.0.1"
+HOST = "192.168.43.213"
+# HOST = "127.0.0.1"
 
 PORT = 5001
 is_running = False 
@@ -303,13 +303,14 @@ def user_chat(page):
 
     main_container = ft.Container(
         content= ft.ListView(
-            width=450,
+            # width=450,
             height=600,
             expand=True,
         ),
         border_radius=10,
         width=450,
         bgcolor="#002A46",
+        expand=1
     )
 
     #it contains the messages
@@ -367,7 +368,7 @@ def user_chat(page):
         ),
         bgcolor="#002D44",
         border_radius=10,
-        expand=True,
+        expand=3,
         height=600,
         alignment=ft.alignment.bottom_center,
         padding=ft.padding.all(30)
