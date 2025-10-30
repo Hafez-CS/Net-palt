@@ -138,7 +138,6 @@ def login_view(page):
                 login_client_socket.close()
 
 
-
     username = ft.TextField(label="Username", width=300, icon=ft.Icons.EMAIL)
     password = ft.TextField(
                             label="Password",

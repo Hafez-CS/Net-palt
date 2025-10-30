@@ -8,7 +8,6 @@ import time
 
 # HOST = "192.168.43.213"
 HOST = "127.0.0.1"
-
 PORT = 5001
 is_running = False 
 DOWNLOAD_DIR = "downloaded/"
