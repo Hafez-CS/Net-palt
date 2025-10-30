@@ -5,6 +5,8 @@ import threading
 import json
 import os
 import time
+from screeninfo import get_monitors
+
 
 HOST = "192.168.43.213"
 # HOST = "127.0.0.1"
@@ -263,6 +265,13 @@ def user_chat(page):
     global main_container
     global client
 
+    width, height = get_monitor_info()
+    """Creates the login screen View."""
+    page.window.height = height // 1.5
+    page.window.width = width // 1.5
+    # page.window.resizable = False
+    page.window.center()
+
     username = page.session.get("current_username")
     # username = "sadra"
     client = connect_to_server(username)
@@ -444,6 +453,19 @@ def user_chat(page):
         )
 
     )
+
+def get_monitor_info():
+    for m in get_monitors():
+        if m.is_primary:
+            primary_monitor = m
+            break
+    
+    if primary_monitor:
+        width = primary_monitor.width
+        height = primary_monitor.height
+
+    return width, height
+
 
 if __name__ == "__main__":
     ft.app(target=user_chat)

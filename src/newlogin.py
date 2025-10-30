@@ -2,6 +2,7 @@ import flet as ft
 import models
 import socket
 import json 
+from screeninfo import get_monitors
 
 # HOST = "127.0.0.1"
 HOST = "192.168.43.213"
@@ -35,11 +36,12 @@ def recv_control(sock):
     return json.loads(j.decode('utf-8'))
 
 def login_view(page):
+    width, height = get_monitor_info()
     """Creates the login screen View."""
-    page.window_height = 400
-    page.window_width = 400
-    page.window_resizable = False
-    
+    page.window.height = height // 2
+    page.window.width = width // 3
+    # page.window.resizable = False
+    page.window.center()
     def autenticate_user(e):
 
         input_username = username.value 
@@ -179,3 +181,15 @@ def login_view(page):
         vertical_alignment=ft.MainAxisAlignment.CENTER,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER
     )
+
+def get_monitor_info():
+    for m in get_monitors():
+        if m.is_primary:
+            primary_monitor = m
+            break
+    
+    if primary_monitor:
+        width = primary_monitor.width
+        height = primary_monitor.height
+
+    return width, height
