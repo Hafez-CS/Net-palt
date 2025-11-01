@@ -64,17 +64,28 @@ class user_control(ft.Row):
             icon= ft.Icons.REMOVE_CIRCLE,
             on_click=self.remove_user
         )
+        self.add_group_button = ft.ElevatedButton(
+            text="new group",
+            expand=True,
+            bgcolor=ft.Colors.BLUE_ACCENT, 
+            color=ft.Colors.WHITE, 
+            icon= ft.Icons.GROUP, 
+            on_click=self.add_group
+            )
 
         super().__init__(
             controls=[
                 self.kick_button,
                 self.add_user_button,
-                self.remove_user_button
+                self.remove_user_button,
+                self.add_group_button
             ],
             expand=True,
             alignment=ft.alignment.top_center
         )
-        
+    def add_group(self, e):
+        pass
+
     def add_user(self,e):
         self.username_input = ft.TextField(label="Username", width=300)
         self.password_input = ft.TextField(label="Password", width=300, password=True, can_reveal_password=True)
@@ -211,6 +222,38 @@ class user_control(ft.Row):
                 print(f"something went wrong in removing user: {e}")
             finally:
                 e.page.close(self.remove_alert)
+
+class Groups(ft.Container):
+    def __init__(self, group_name, avatar):
+        super().__init__(
+                        ink=True,
+                        height=65,
+                        width=280,
+                        border_radius=10,
+                        margin= ft.margin.only(0,0,0,5),)
+
+        self.group_name = group_name
+        self.avatar = avatar
+        
+        avatar_stack = ft.Stack(
+                [
+                    ft.CircleAvatar(
+                        foreground_image_src=self.avatar,
+
+                    ),
+
+                ],
+                width=40,
+                height=40,
+            )
+        
+        self.content = ft.Row(
+                    [
+                        avatar_stack,
+                        ft.Text(self.group_name, size=20),                       
+                    ],
+                    
+            )
 
 
 class online_user(ft.Container):
@@ -402,18 +445,54 @@ def admin(page):
 
     online_users_container = ft.ListView(
         controls=[],
+    )
+
+    all_groups_container = ft.ListView(
+        controls=[]
+    )
+    all_groups_container.controls.append(Groups(group_name="chetori?",avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
+    all_groups_container.controls.append(Groups(group_name="dcdcc?",avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
+    all_groups_container.controls.append(Groups(group_name="chetcdcccdcori?",avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
+    all_groups_container.controls.append(Groups(group_name="chetcdcdcori?",avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
+
+
+    contact_tab = ft.Tab(
+            text="Contacts",
+            content=ft.Container(
+                content= online_users_container,
+                border_radius=10,
+                bgcolor="#002A46",
+            )
+        )
+    
+    group_tab = ft.Tab(
+        text="Groups",
+        content=ft.Container(
+            all_groups_container,
+            border_radius=10,
+            bgcolor="#002A46",
+        )
+    )
+    
+    tabs = [
+        contact_tab,
+        group_tab
+    ]
+
+    tabs_container = ft.Container(
+        ft.Tabs(
+        selected_index=0,
+        animation_duration=300,
+        tabs=tabs,
+        scrollable=True,
+        ),
+        expand=1,
         height=700,
-        width=300,
-    )
-
-    users_section = ft.Container(
-        online_users_container,
         border_radius=10,
-        bgcolor= ft.Colors.GREY_900,
-        padding=10,
-        height=700
-    )
+        bgcolor="#002A46",
+        padding=10
 
+    )
 
     refresh_users_thread = threading.Thread(target=refresh_users, args=(page,), daemon=True)
     refresh_users_thread.start()
@@ -498,7 +577,7 @@ def admin(page):
         
         ),
         bgcolor="#002D44",
-        expand=True,
+        expand=3,
         height=700,
         alignment=ft.alignment.bottom_center,
         padding=ft.padding.all(5),
@@ -511,7 +590,7 @@ def admin(page):
         controls=[
             ft.Row(
                 [
-                    users_section,
+                    tabs_container,
                     control_container
                 ]
 
