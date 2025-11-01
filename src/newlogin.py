@@ -42,12 +42,13 @@ def login_view(page):
     page.window.width = width // 3
     # page.window.resizable = False
     page.window.center()
+
     def autenticate_user(e):
 
         input_username = username.value 
         input_password = password.value
 
-        if not input_username or input_password:
+        if not input_username or not input_password:
             error = ft.AlertDialog(
                 title=ft.Text("empty fiealds"),
                 content=ft.Text("please fill the fields and try again."),
@@ -57,6 +58,7 @@ def login_view(page):
 
         if input_username == "admin" and input_password == "admin":
             page.go("/admin")
+            return
 
         login_client_socket = None
         
