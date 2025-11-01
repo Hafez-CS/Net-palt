@@ -81,29 +81,36 @@ def recv_control(sock):
     j = recv_all(sock, length)
     return json.loads(j.decode('utf-8'))
 
-def show_message(msg):       
-        sender = msg["username"]
-        username_span_text = f"{sender}: "
-        text = msg["text"]
+def show_message(msg, page):       
+    sender = msg["username"]
+    username_span_text = f"{sender}: "
+    text = msg["text"]
 
-        text_style = ft.TextStyle(size=16, color=ft.Colors.BLUE_GREY_100, italic=True)
-        alignment = ft.MainAxisAlignment.START
+    text_style = ft.TextStyle(size=16, color=ft.Colors.BLUE_GREY_100, italic=True)
+    alignment = ft.MainAxisAlignment.START
 
-        chat_list_view.controls.append(
+    chat_list_view.controls.append(
+            ft.Container(
                 ft.Row(
                     [
-                        ft.Text(
-                            spans=[
-                                ft.TextSpan(username_span_text, style=text_style),
-                                ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
-                            ],
-                            size=18
-                        )
+                    ft.Text(
+                        spans=[
+                            ft.TextSpan(username_span_text, style=text_style),
+                            ft.TextSpan(text, style=ft.TextStyle(color=ft.Colors.WHITE))
+                        ],
+                        size=18
+                    )
                     ],
                     alignment=alignment # Align messages based on sender
-                )
+                ),
+                padding=10,
+                bgcolor=ft.Colors.BLACK,
+                expand=True,
+                # height=20,
+                ink=True
             )
-        
+        )
+    page.update()
 
 def recv_loop(client, page):
     global is_running
@@ -114,7 +121,7 @@ def recv_loop(client, page):
             msg = recv_control(client)
             if msg["type"] == "PMSG_RECV":
                 if current_recipient == msg["username"]:
-                    show_message(msg)
+                    show_message(msg, page)
                     page.update()
         
             elif msg["type"] == "RecAllUser":
@@ -326,6 +333,7 @@ def user_chat(page):
     chat_list_view =  ft.ListView(
                     controls=[],
                     expand=True,
+                    auto_scroll=True
                 )
     #these are buttons and the text input
     select_file_button = ft.IconButton(ft.Icons.FILE_OPEN,
