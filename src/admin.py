@@ -7,6 +7,7 @@ import time
 import threading
 import bcrypt
 import sys
+from screeninfo import get_monitors
 
 HOST = "127.0.0.1"
 PORT = 5001
@@ -319,8 +320,7 @@ def connect_to_server(username):
     return client
 
 
-def get_online_users():
-    pass
+
 
 def refresh_users(page):
     global refresh_thread_running
@@ -355,6 +355,12 @@ def admin(page):
     global online_users_container
     global refresh_thread_running
 
+    width, height = get_monitor_info()
+    """Creates the login screen View."""
+    page.window.height = height // 1.5
+    page.window.width = width // 1.5
+    time.sleep(0.5)
+    page.window.center()
     # username = page.session.get("current_username")
     username = "admin"
 
@@ -515,4 +521,16 @@ def admin(page):
     )
 
 
+
+def get_monitor_info():
+    for m in get_monitors():
+        if m.is_primary:
+            primary_monitor = m
+            break
+    
+    if primary_monitor:
+        width = primary_monitor.width
+        height = primary_monitor.height
+
+    return width, height
 
