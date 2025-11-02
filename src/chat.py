@@ -377,7 +377,6 @@ def user_chat(page):
     )
 
 
-    print("before tab")
 
     contact_tab = ft.Tab(
             text="Contacts",
@@ -420,7 +419,6 @@ def user_chat(page):
 
     )
 
-    print("after tab")
 
 
 

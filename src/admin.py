@@ -12,7 +12,8 @@ from screeninfo import get_monitors
 HOST = "127.0.0.1"
 PORT = 5001
 RUNNING = False
-
+RELOAD = 2
+is_running = False
 
 def start_server():
     global server
@@ -24,6 +25,25 @@ def start_server():
         sys.exit()
     finally:
         RUNNING = True
+
+def connect_to_server(username, page):
+    global is_running
+    #networking 
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((HOST, PORT))
+
+    # Introduce to server
+    send_control(client, {"type": "HELLO", "username": username})
+    is_running = True
+
+    recv_msg_thread = threading.Thread(target=recv_loop, args=(client, page))
+    recv_msg_thread.start()
+
+    updata_user_thread = threading.Thread(target=get_all_users, args=(client, username))
+    updata_user_thread.start()
+
+    print("connected")
+    return client
 
 
 def hash_password(password):
@@ -322,10 +342,14 @@ class online_user(ft.Container):
         print("clicked")
 
 
-def get_all_users():
-    models.init_db()
-    users = models.get_all_users_db()
-    return users
+def get_all_users(client, username):
+    global is_running
+
+    while is_running:
+        request_msg = {"type": "GetAllUser", "username": username}
+        send_control(sock=client, data=request_msg)
+        time.sleep(RELOAD)
+
 
 def send_control(sock, data: dict):
     """Send a JSON control message with a fixed header length"""
@@ -350,22 +374,50 @@ def recv_control(sock):
     j = recv_all(sock, length)
     return json.loads(j.decode('utf-8'))
 
+def recv_loop(client, page):
+    global is_running
+    global current_recipient
 
-def connect_to_server(username):
-    #networking 
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((HOST, PORT))
-    # Introduce to server
-    send_control(client, {"type": "HELLO", "username": username})
-    is_running = True
-    # threading.Thread(target=recv_loop, daemon=True).start()
-    print("connected")
-    return client
+    try:
+        while is_running:
+            msg = recv_control(client)
+            # if msg["type"] == "PMSG_RECV":
+            #     if current_recipient == msg["username"]:
+            #         show_message(msg, page)
+            #         page.update()
+        
+            if msg["type"] == "RecAllUser":
+                refresh_users(page, msg["text"])
+
+            # elif msg["type"] == "RECV_HISTORY":
+            #     update_user_messages(page, msg["text"])
+
+                # if msg["type"] == "MSG":
+                #     self.show_msg(f"{msg['username']}: {msg['text']}")
+                # elif msg["type"] == "USER_JOIN":
+                #     self.show_msg(f"[{msg['username']} joined]")
+                # elif msg["type"] == "USER_LEFT":
+                #     self.show_msg(f"[{msg['username']} left]")
+                # elif msg["type"] == "SERVER_CLOSE": 
+                #     self.show_msg(f"[SERVER]: {msg.get('message', 'Server has closed.')}")
+                #     break
+                # elif msg["type"] == "ERROR":
+                #     self.show_msg("[Error: " + msg.get("message","") + "]")
+    except socket.error as e:
+        if is_running:
+            print("[CONNECTION LOST] Admin panel connection to server closed unexpectedly.")
+    except Exception as e:
+        print("Error in user recv loop:", e)
+    finally:
+        is_running = False 
+        pass
 
 
 
 
-def refresh_users(page):
+
+
+def refresh_users(page, users):
     global refresh_thread_running
 
     refresh_thread_running = True # Set the flag when thread starts
@@ -375,8 +427,7 @@ def refresh_users(page):
     while refresh_thread_running: 
         try:
             online_users_container.controls.clear()
-            all_users = get_all_users()
-            for user in all_users:
+            for user in users:
                 # Assuming ChatServer and online_user are defined and work
                 online_users_container.controls.append(
                     online_user(user, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png")
@@ -433,9 +484,9 @@ def admin(page):
     try:
         #starting the server
         start_server()
-        time.sleep(1)
+        time.sleep(0.5)
         #coneccting to server as a client
-        client = connect_to_server(username)
+        client = connect_to_server(username, page)
     except Exception as e:
         print(f"Error : {e}")
     # users_status = ChatServer.get_all_users_with_status()
@@ -494,8 +545,8 @@ def admin(page):
 
     )
 
-    refresh_users_thread = threading.Thread(target=refresh_users, args=(page,), daemon=True)
-    refresh_users_thread.start()
+    # refresh_users_thread = threading.Thread(target=refresh_users, args=(page,), daemon=True)
+    # refresh_users_thread.start()
 
 
 #it contains the messages

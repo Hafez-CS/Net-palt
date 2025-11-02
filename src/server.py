@@ -251,7 +251,9 @@ class ChatServer:
             # if username != "admin": 
             #     # self.broadcast_message(f"{username} joined", "SERVER")
             #     send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
-            
+            if username == "admin":
+                print("admin is here")
+
             while True:
                 msg = recv_control(client_socket)
                 
@@ -311,8 +313,9 @@ class ChatServer:
                 elif msg["type"] == "BYE":
                      return
                     
-        except ConnectionError:
-            pass 
+        # except ConnectionError:
+        #     # print(f"error: ConnectionError")
+        #     pass 
 
         except Exception as e:
             print(f"[SERVER ERROR] Error handling client {username}: {e}")

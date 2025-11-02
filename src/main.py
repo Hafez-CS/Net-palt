@@ -4,7 +4,7 @@ from chat import user_chat
 from newlogin import login_view
 from screeninfo import get_monitors
 from admin import admin
-from test import tab
+# from test import tab
 # 1. Define the component or view function
 
 
@@ -28,8 +28,8 @@ def main(page: ft.Page):
             page.views.append(user_chat(page))
         elif page.route == "/admin":
             page.views.append(admin(page))
-        elif page.route == "/test": 
-            page.views.append(tab(page))
+        # elif page.route == "/test": 
+        #     page.views.append(tab(page))
         page.update()
 
     page.on_route_change = route_change
