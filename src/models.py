@@ -332,3 +332,24 @@ def get_historical_messages_db(user1_username, user2_username, conn=None):
     finally:
         if close_conn:
             conn.close()
+
+def add_group_db(group_name, conn=None):
+    """Adds a new group to the database."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO groups (name) VALUES (?)", (group_name,))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        print(f"[DB ERROR] Group '{group_name}' already exists.")
+        return None
+    except Exception as e:
+        print(f"[DB ERROR] Add group failed: {e}")
+        return False
+    finally:
+        if close_conn:
+            conn.close()

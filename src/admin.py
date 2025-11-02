@@ -36,10 +36,10 @@ def connect_to_server(username, page):
     send_control(client, {"type": "HELLO", "username": username})
     is_running = True
 
-    recv_msg_thread = threading.Thread(target=recv_loop, args=(client, page))
+    recv_msg_thread = threading.Thread(target=recv_loop, args=(client, page), daemon=True)
     recv_msg_thread.start()
 
-    updata_user_thread = threading.Thread(target=get_all_users, args=(client, username))
+    updata_user_thread = threading.Thread(target=get_all_users, args=(client, username), daemon=True)
     updata_user_thread.start()
 
     print("connected")
@@ -104,7 +104,47 @@ class user_control(ft.Row):
             alignment=ft.alignment.top_center
         )
     def add_group(self, e):
-        pass
+        self.groupname_input = ft.TextField(label="Group name", width=300, max_length=20)
+        self.newgroup_dialog = ft.AlertDialog(
+            title="Add New Group",
+            content=ft.Container(
+
+                self.groupname_input
+                
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda e: e.page.close(self.newgroup_dialog)),
+                ft.ElevatedButton("Add", on_click=self.confirm_newgroup),
+            ]
+        )
+        e.page.open(self.newgroup_dialog)
+
+    def confirm_newgroup(self, e):
+        self.groupname = self.groupname_input.value
+        if not self.groupname:
+            self.groupname_input.error_text = "the group name can't be empty"
+            self.newgroup_dialog.update()
+        self.res_alert = ft.AlertDialog(
+            title="Add New Group",
+            actions=[
+                ft.TextButton("Ok", on_click=lambda e: e.page.close(self.res_alert))
+            ],
+            actions_alignment=ft.MainAxisAlignment.CENTER
+        )
+        try:
+            res = models.add_group_db(self.groupname)
+            if res:
+                self.res_alert.content = ft.Text("successful", color=ft.Colors.GREEN, size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
+                e.page.open(self.res_alert)
+            elif res == None:
+                self.res_alert.content = ft.Text("this group exists", color=ft.Colors.RED, size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
+                e.page.open(self.res_alert)
+            if res == False:
+                raise
+        except:
+            self.res_alert.content = ft.Text("something went wrong", color=ft.Colors.RED, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
+            e.page.open(self.res_alert)
+
 
     def add_user(self,e):
         self.username_input = ft.TextField(label="Username", width=300)
