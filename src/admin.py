@@ -218,7 +218,7 @@ class user_control(ft.Row):
 
     #build a dropdown for showing all users
     def build_user_dropdown(self):
-        self.users_list = get_all_users()
+        self.users_list = users_list
         options = []
         for user in self.users_list:
             options.append(
@@ -289,15 +289,17 @@ class user_control(ft.Row):
 class Group(ft.Container):
     def __init__(self, group_name, avatar):
         super().__init__(
-                        ink=True,
                         height=65,
                         width=280,
                         border_radius=10,
-                        margin= ft.margin.only(0,0,0,5),)
+                        margin= ft.margin.only(0,0,0,5),
+                        ink=True,
+                        on_click=self.group_profile
+                        )
 
         self.group_name = group_name
         self.avatar = avatar
-        
+        self.is_cliked = False
         avatar_stack = ft.Stack(
                 [
                     ft.CircleAvatar(
@@ -317,6 +319,138 @@ class Group(ft.Container):
                     ],
                     
             )
+    def group_profile(self, e):
+        self.group_avatar = ft.Container(
+            ft.CircleAvatar(ft.Image(src=self.avatar), radius=30),
+            border_radius=30
+        )
+        self.group_name_text = ft.Text(self.group_name, text_align=ft.TextAlign.CENTER, size=24, color=ft.Colors.WHITE)
+        self.header = ft.Container(
+            ft.Row(
+                controls=[
+                    self.group_avatar,
+                    self.group_name_text
+                ]
+            ),
+            padding=10,
+            bgcolor=ft.Colors.GREY_900,
+            border_radius=10
+        )
+        self.add_user_button = ft.ElevatedButton("Add New User", color=ft.Colors.WHITE, bgcolor=ft.Colors.GREEN, expand=True, on_click=self.add_user)
+        self.remove_user_button = ft.ElevatedButton("remove User", color=ft.Colors.WHITE, bgcolor=ft.Colors.RED, expand=True )
+
+        self.body = ft.Container(
+            ft.ListView(
+                controls=[
+                    self.add_user_button,
+                    self.remove_user_button
+                ],
+                spacing=10
+                
+            ),
+            padding=10,
+            bgcolor=ft.Colors.GREY_900,
+            border_radius=10,
+
+        )
+        self.group_profile_list = ft.ListView(
+            controls=[
+                self.group_avatar,
+                self.group_name_text
+            ],
+            height=500
+        )
+        self.group_alert = ft.AlertDialog(
+            title=f"{self.group_name} - Profile",
+            content=ft.Column(
+                [
+                    self.header,
+                    ft.Divider(),
+                    self.body
+                ]
+            ),
+        )
+        e.page.open(self.group_alert)
+
+    def add_user(self, e):
+        self.users = users_list
+        self.submit_button = ft.ElevatedButton("submit", color=ft.Colors.WHITE, bgcolor=ft.Colors.GREEN, on_click=self.submit_add_user)
+        self.list_users = ft.ListView()
+        self.user_checkboxes = {}
+        self.selected_users = []
+
+        for user in self.users:
+            chk = ft.Checkbox(label=user)
+            self.user_checkboxes[user] = chk
+
+        users_col = ft.Column(
+            controls=list(self.user_checkboxes.values())
+        )
+
+        # for _, chk in self.user_checkboxes.items():
+        #     users_col.controls.append(chk)
+
+
+        self.add_user_alert = ft.AlertDialog(
+            title="Select Users",
+            content=ft.Column(
+                controls=[
+                    users_col,
+                    self.submit_button
+                ],
+                spacing=10
+                
+            ),
+        )
+        e.page.open(self.add_user_alert)
+
+    def submit_add_user(self, e):
+        self.selected_users.clear()
+        for name, checkbox in self.user_checkboxes.items():
+            if checkbox.value:  
+                self.selected_users.append(name)
+        
+        for checkbox in self.user_checkboxes.values():
+            checkbox.value = False
+
+        if self.selected_users:
+            e.page.close(self.add_user_alert)
+            
+            try:
+                add_res = {}
+                for user in self.selected_users:
+                    res = models.add_user_to_group_db(username=user, group_name=self.group_name)
+                    add_res[user] = res
+                print(add_res)
+            except Exception as e:
+                e.page.open(ft.AlertDialog(
+                    title="ERROR",
+                    content=ft.Text(e),
+                    actions=ft.TextButton("OK")
+                ))
+                
+            success_alert = ft.AlertDialog(
+                title="successful",
+                title_text_style=ft.TextStyle(color=ft.Colors.GREEN, size=28, weight=ft.FontWeight.BOLD),
+                content=ft.Text("users are successfully added.", size=24, color=ft.Colors.WHITE, weight=ft.FontWeight.NORMAL, text_align=ft.TextAlign.CENTER),
+                actions=[
+                    ft.TextButton("Ok", on_click=lambda e: e.page.close(success_alert))
+                ]
+                )
+            e.page.open(success_alert)
+
+            
+
+        else:
+            if not self.is_cliked:
+                self.add_user_alert.content.controls.append(
+                    ft.Text("please select a user first!", size=18, color=ft.Colors.RED, weight=ft.FontWeight.NORMAL, text_align=ft.TextAlign.CENTER)
+                )
+                e.page.update()
+            self.is_cliked = True
+
+        print(self.selected_users)
+        e.page.update()
 
 
 class online_user(ft.Container):
@@ -467,13 +601,14 @@ def recv_loop(client, page):
 
 def refresh_users(page, users: list = None, is_group: bool= False, groups: list = None):
     global refresh_thread_running
-
+    global users_list
     refresh_thread_running = True # Set the flag when thread starts   
 
     if refresh_thread_running: 
         try:
             
             if not is_group:
+                users_list = users
                 online_users_container.controls.clear()
                 for user in users:
                     # Assuming ChatServer and online_user are defined and work

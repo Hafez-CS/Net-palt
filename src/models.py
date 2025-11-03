@@ -372,3 +372,61 @@ def get_all_groups_db(conn=None):
     finally:
         if close_conn:
             conn.close()
+
+def get_group_id_by_name(group_name, conn=None):
+    """Fetches group ID by group name."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT group_id FROM groups WHERE name = ?", (group_name,))
+        result = cur.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        print(f"[DB ERROR] Fetch group ID failed: {e}")
+        return None
+    finally:
+        if close_conn:
+            conn.close()
+
+            
+def add_user_to_group_db(username, group_name, conn=None):
+    """Adds a user to a specific group."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        
+        # 1. Get IDs
+        user_id = get_user_id_by_username(username, conn)
+        group_id = get_group_id_by_name(group_name, conn)
+        
+        if user_id is None:
+            print(f"[DB ERROR] User '{username}' not found.")
+            return False
+        if group_id is None:
+            print(f"[DB ERROR] Group '{group_name}' not found.")
+            return False
+            
+        # 2. Add to junction table
+        cur.execute("""
+            INSERT INTO group_members (group_id, user_id) 
+            VALUES (?, ?)
+        """, (group_id, user_id))
+        
+        conn.commit()
+        print(f"[DB] User '{username}' added to group '{group_name}'.")
+        return True
+    except sqlite3.IntegrityError:
+        print(f"[DB ERROR] User '{username}' is already a member of group '{group_name}'.")
+        return False
+    except Exception as e:
+        print(f"[DB ERROR] Add user to group failed: {e}")
+        return False
+    finally:
+        if close_conn:
+            conn.close()
