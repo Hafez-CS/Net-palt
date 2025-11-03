@@ -333,33 +333,24 @@ class Group(ft.Container):
                 ]
             ),
             padding=10,
-            bgcolor=ft.Colors.GREY_900,
+            bgcolor="#00476A",
             border_radius=10
         )
         self.add_user_button = ft.ElevatedButton("Add New User", color=ft.Colors.WHITE, bgcolor=ft.Colors.GREEN, expand=True, on_click=self.add_user)
         self.remove_user_button = ft.ElevatedButton("remove User", color=ft.Colors.WHITE, bgcolor=ft.Colors.RED, expand=True )
-
         self.body = ft.Container(
             ft.ListView(
-                controls=[
-                    self.add_user_button,
-                    self.remove_user_button
-                ],
-                spacing=10
+                controls=[],
+                spacing=10,
+                height=500
                 
             ),
             padding=10,
-            bgcolor=ft.Colors.GREY_900,
             border_radius=10,
 
         )
-        self.group_profile_list = ft.ListView(
-            controls=[
-                self.group_avatar,
-                self.group_name_text
-            ],
-            height=500
-        )
+        
+
         self.group_alert = ft.AlertDialog(
             title=f"{self.group_name} - Profile",
             content=ft.Column(
@@ -369,8 +360,52 @@ class Group(ft.Container):
                     self.body
                 ]
             ),
+            bgcolor="#023047",
         )
+
+        #refreshing group members
+        self.update_group_members()
         e.page.open(self.group_alert)
+
+    def update_group_members(self):
+        self.group_members = models.get_group_members_db(group_name=self.group_name)
+        self.body.content.controls.clear()
+        #adding buttons
+        self.body.content.controls.append(self.add_user_button)
+        self.body.content.controls.append(self.remove_user_button)
+        #adding members
+        if len(self.group_members) > 0:
+            for member in self.group_members:
+                mem = ft.Container(
+                    ft.Row(
+                        controls=[
+                            ft.Icon(ft.Icons.PERSON_ROUNDED, size=20),
+                            ft.Text(member, size=16, expand=True),
+                            ft.IconButton(ft.Icons.HIGHLIGHT_REMOVE_ROUNDED, icon_color=ft.Colors.RED, on_click=lambda e, m=member: self.remove_user_from_group(e, m))
+                        ]
+                    ),
+                    padding=10,
+                    border_radius=10,
+                    bgcolor="#00476A"
+                )
+                
+                
+                
+                self.body.content.controls.append(mem)
+    def remove_user_from_group(self, e, username):
+        try:
+            res = models.remove_user_from_group_db(username, self.group_name)
+            if res:
+                self.update_group_members()
+            else:
+                raise
+        except Exception as e:
+            e.page.open(ft.AlertDialog(
+                    title="ERROR",
+                    content=ft.Text(e),
+                    actions=ft.TextButton("OK")
+                ))
+
 
     def add_user(self, e):
         self.users = users_list
