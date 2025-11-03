@@ -7,8 +7,10 @@ import os
 import time
 from screeninfo import get_monitors
 
-# HOST = "192.168.43.213"
-HOST = "127.0.0.1"
+
+HOST = "192.168.43.213"
+# HOST = "127.0.0.1"
+
 PORT = 5001
 is_running = False 
 DOWNLOAD_DIR = "downloaded/"
@@ -207,15 +209,15 @@ class contact:
     
     
 def update_contacts_ui(page, users):
-    global contact_tab
+    global main_container
 
-    contact_tab.content.content.controls.clear()
+    main_container.content.controls.clear()
 
     for user in users:
         user = contact(page, user, "assets/profile.png")
         contact_container = user.container
-        contact_tab.content.content.controls.append(contact_container)
-
+        main_container.content.controls.append(contact_container)
+        
     page.update()
     print("cantacts are reloaded!")
 
@@ -267,8 +269,8 @@ def user_chat(page):
     global send_button
     global select_file_button
     global username
+    global main_container
     global client
-    global contact_tab
 
     width, height = get_monitor_info()
     """Creates the login screen View."""
@@ -276,9 +278,9 @@ def user_chat(page):
     page.window.width = width // 1.5
     # page.window.resizable = False
     page.window.center()
-    # page.session.set("current_username", "sadra")
+
     username = page.session.get("current_username")
-    
+    # username = "sadra"
     client = connect_to_server(username)
 
     def process_messege(e):
@@ -313,6 +315,20 @@ def user_chat(page):
         page.update()
 
     
+
+
+    main_container = ft.Container(
+        content= ft.ListView(
+            # width=450,
+            height=600,
+            expand=True,
+        ),
+        border_radius=10,
+        width=450,
+        bgcolor="#002A46",
+        expand=1
+    )
+
     #it contains the messages
     chat_list_view =  ft.ListView(
                     controls=[],
@@ -377,48 +393,26 @@ def user_chat(page):
     )
 
 
-
-    contact_tab = ft.Tab(
-            text="Contacts",
-            content=ft.Container(
-                content= ft.ListView(
-                    # width=450,
-                    height=600,
-                    expand=True,
-                ),
-                border_radius=10,
-                width=450,
-                bgcolor="#002A46",
-                expand=1
-            )
-        )
-    
+    print("before tab")
     tabs = [
-        contact_tab,
         ft.Tab(
-            text="Groups",
+            text="Contacts",
             content=ft.Container(
                 ft.Text("hello"),
                 ft.Text("im here"),
             )
-        )
+        ),
     ]
 
-    tabs_container = ft.Container(
-        ft.Tabs(
+    all_tabs = ft.Tabs(
         selected_index=0,
         animation_duration=300,
         tabs=tabs,
         scrollable=True,
-        ),
-        expand=1,
-        height=600,
-        border_radius=10,
-        width=450,
-        bgcolor="#002A46"
 
-    )
+    ) 
 
+    print("after tab")
 
 
 
@@ -446,11 +440,12 @@ def user_chat(page):
         "/main",
         [
             ft.Row(controls=[
-                tabs_container,
+                main_container,
                 chat_container,
+                # ft.Container(all_tabs)
                 ]
 
-            ),
+            )
         ],
         vertical_alignment=ft.MainAxisAlignment.CENTER,
         horizontal_alignment=ft.CrossAxisAlignment.START,

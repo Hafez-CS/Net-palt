@@ -87,8 +87,10 @@ class ChatServer:
     def request_get_all_users(self, username):
         self.send_private_update(msg=models.get_all_users_db(), recipient=username, type="RecAllUser")
 
+    def request_get_all_groups(self, username):
+        self.send_private_update(msg=models.get_all_groups_db(), recipient=username, type="RECALLGROUPS")
+
     def send_private_update(self, msg, recipient, type):
-        users_with_status = self.get_all_users_with_status()
         recipient_socket = None
         with self.lock:
             recipient_socket = self.clients.get(recipient)
@@ -263,6 +265,10 @@ class ChatServer:
 
                 elif msg["type"] == "GetAllUser":
                     self.request_get_all_users(username=msg["username"])
+                    continue
+                
+                elif msg["type"] == "GETALLGROUPS":
+                    self.request_get_all_groups(username=msg["username"])
                     continue
 
                 elif msg["type"] == "get_status":

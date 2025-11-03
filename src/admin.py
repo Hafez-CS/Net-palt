@@ -286,7 +286,7 @@ class user_control(ft.Row):
             finally:
                 e.page.close(self.remove_alert)
 
-class Groups(ft.Container):
+class Group(ft.Container):
     def __init__(self, group_name, avatar):
         super().__init__(
                         ink=True,
@@ -389,9 +389,15 @@ def get_all_users(client, username):
     global is_running
 
     while is_running:
+
         request_msg = {"type": "GetAllUser", "username": username}
         send_control(sock=client, data=request_msg)
         time.sleep(RELOAD)
+        
+        request_msg = {"type": "GETALLGROUPS", "username": username}
+        send_control(sock=client, data=request_msg)
+        time.sleep(RELOAD)
+
 
 
 def send_control(sock, data: dict):
@@ -430,8 +436,9 @@ def recv_loop(client, page):
             #         page.update()
         
             if msg["type"] == "RecAllUser":
-                refresh_users(page, msg["text"])
-
+                refresh_users(page, msg["text"], is_group=False)
+            elif msg["type"] == "RECALLGROUPS":
+                refresh_users(page, is_group=True, groups=msg["text"])
             # elif msg["type"] == "RECV_HISTORY":
             #     update_user_messages(page, msg["text"])
 
@@ -458,39 +465,44 @@ def recv_loop(client, page):
 
 
 
-
-
-def refresh_users(page, users):
+def refresh_users(page, users: list = None, is_group: bool= False, groups: list = None):
     global refresh_thread_running
 
-    refresh_thread_running = True # Set the flag when thread starts
-    print("Refresh thread started.")
-    
-    # Loop while the global flag is True
-    while refresh_thread_running: 
+    refresh_thread_running = True # Set the flag when thread starts   
+
+    if refresh_thread_running: 
         try:
-            online_users_container.controls.clear()
-            for user in users:
-                # Assuming ChatServer and online_user are defined and work
-                online_users_container.controls.append(
-                    online_user(user, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png")
-                )
-            page.update()
+            
+            if not is_group:
+                online_users_container.controls.clear()
+                for user in users:
+                    # Assuming ChatServer and online_user are defined and work
+                    online_users_container.controls.append(
+                        online_user(user, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png")
+                    )
+                page.update()
+            elif is_group:
+                all_groups_container.controls.clear()
+                for group in groups:
+                    all_groups_container.controls.append(Group(group_name=group, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
+                page.update()
+
         except Exception as e:
             # Handle exceptions during update/network operations
             print(f"Error in refresh_users: {e}") 
         
         # Check flag again before sleeping
-        if refresh_thread_running: 
-            time.sleep(2)
-    
-    print("Refresh thread safely stopped.")
+        # if refresh_thread_running: 
+        #     time.sleep(2)
+    else:
+        print("Refresh thread safely stopped.")
 
 
 def admin(page):
     global username
     global online_users_container
     global refresh_thread_running
+    global all_groups_container
 
     width, height = get_monitor_info()
     """Creates the login screen View."""
@@ -544,11 +556,6 @@ def admin(page):
     all_groups_container = ft.ListView(
         controls=[]
     )
-    all_groups_container.controls.append(Groups(group_name="chetori?",avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
-    all_groups_container.controls.append(Groups(group_name="dcdcc?",avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
-    all_groups_container.controls.append(Groups(group_name="chetcdcccdcori?",avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
-    all_groups_container.controls.append(Groups(group_name="chetcdcdcori?",avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
-
 
     contact_tab = ft.Tab(
             text="Contacts",
