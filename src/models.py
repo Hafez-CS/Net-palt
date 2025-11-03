@@ -353,3 +353,22 @@ def add_group_db(group_name, conn=None):
     finally:
         if close_conn:
             conn.close()
+
+def get_all_groups_db(conn=None):
+    """Fetches the names of all groups from the database."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        # فقط نام گروه‌ها را انتخاب می‌کنیم
+        cur.execute("SELECT name FROM groups") 
+        # نتایج را به صورت یک لیست از رشته‌ها برمی‌گردانیم
+        return [row[0] for row in cur.fetchall()] 
+    except Exception as e:
+        print(f"[DB ERROR] Fetch all groups failed: {e}")
+        return []
+    finally:
+        if close_conn:
+            conn.close()

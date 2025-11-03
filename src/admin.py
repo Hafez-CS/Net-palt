@@ -132,14 +132,17 @@ class user_control(ft.Row):
             actions_alignment=ft.MainAxisAlignment.CENTER
         )
         try:
+            #adding new group to database
             res = models.add_group_db(self.groupname)
+
+            #showing alert based on db result
             if res:
                 self.res_alert.content = ft.Text("successful", color=ft.Colors.GREEN, size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
                 e.page.open(self.res_alert)
             elif res == None:
                 self.res_alert.content = ft.Text("this group exists", color=ft.Colors.RED, size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
                 e.page.open(self.res_alert)
-            if res == False:
+            elif res == False:
                 raise
         except:
             self.res_alert.content = ft.Text("something went wrong", color=ft.Colors.RED, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
