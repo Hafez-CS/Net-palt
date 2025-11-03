@@ -430,3 +430,46 @@ def add_user_to_group_db(username, group_name, conn=None):
     finally:
         if close_conn:
             conn.close()
+
+def remove_user_from_group_db(username, group_name, conn=None):
+    """Removes a user from a specific group."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        
+        # 1. Get IDs (از توابعی که قبلاً تعریف شدند استفاده می‌کنیم)
+        user_id = get_user_id_by_username(username, conn)
+        group_id = get_group_id_by_name(group_name, conn)
+        
+        if user_id is None:
+            print(f"[DB ERROR] User '{username}' not found.")
+            return False
+        if group_id is None:
+            print(f"[DB ERROR] Group '{group_name}' not found.")
+            return False
+            
+        # 2. Delete from junction table
+        cur.execute("""
+            DELETE FROM group_members 
+            WHERE group_id = ? AND user_id = ?
+        """, (group_id, user_id))
+        
+        row_count = cur.rowcount
+        conn.commit()
+        
+        if row_count > 0:
+            print(f"[DB] User '{username}' removed from group '{group_name}'.")
+            return True
+        else:
+            print(f"[DB] User '{username}' was not a member of group '{group_name}' or already removed.")
+            return False
+            
+    except Exception as e:
+        print(f"[DB ERROR] Remove user from group failed: {e}")
+        return False
+    finally:
+        if close_conn:
+            conn.close()
