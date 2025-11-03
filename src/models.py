@@ -473,3 +473,45 @@ def remove_user_from_group_db(username, group_name, conn=None):
     finally:
         if close_conn:
             conn.close()
+
+def get_group_members_db(group_name, conn=None):
+    """
+    Fetches the usernames of all members in a specific group 
+    by joining the 'users', 'groups', and 'group_members' tables.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+        
+    try:
+        cur = conn.cursor()
+        
+        # SQL query to join the three tables and filter by group name
+        cur.execute("""
+            SELECT T1.username 
+            FROM users T1
+            JOIN group_members T2 ON T1.user_id = T2.user_id
+            JOIN groups T3 ON T2.group_id = T3.group_id
+            WHERE T3.name = ?
+            ORDER BY T1.username ASC
+        """, (group_name,))
+        
+        # Fetch results and return them as a list of usernames
+        members = [row[0] for row in cur.fetchall()]
+        
+        if not members:
+            # بررسی می‌کنیم که آیا اصلاً گروهی با این نام وجود دارد یا خیر
+            if get_group_id_by_name(group_name, conn) is None:
+                print(f"[DB INFO] Group '{group_name}' not found.")
+            else:
+                print(f"[DB INFO] Group '{group_name}' found, but has no members.")
+        
+        return members
+    
+    except Exception as e:
+        print(f"[DB ERROR] Fetch group members failed: {e}")
+        return []
+    finally:
+        if close_conn:
+            conn.close()
