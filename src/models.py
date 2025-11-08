@@ -332,3 +332,233 @@ def get_historical_messages_db(user1_username, user2_username, conn=None):
     finally:
         if close_conn:
             conn.close()
+
+def add_group_db(group_name, conn=None):
+    """Adds a new group to the database."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO groups (name) VALUES (?)", (group_name,))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        print(f"[DB ERROR] Group '{group_name}' already exists.")
+        return None
+    except Exception as e:
+        print(f"[DB ERROR] Add group failed: {e}")
+        return False
+    finally:
+        if close_conn:
+            conn.close()
+
+def get_all_groups_db(conn=None):
+    """Fetches the names of all groups from the database."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        # فقط نام گروه‌ها را انتخاب می‌کنیم
+        cur.execute("SELECT name FROM groups") 
+        # نتایج را به صورت یک لیست از رشته‌ها برمی‌گردانیم
+        return [row[0] for row in cur.fetchall()] 
+    except Exception as e:
+        print(f"[DB ERROR] Fetch all groups failed: {e}")
+        return []
+    finally:
+        if close_conn:
+            conn.close()
+
+def get_group_id_by_name(group_name, conn=None):
+    """Fetches group ID by group name."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT group_id FROM groups WHERE name = ?", (group_name,))
+        result = cur.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        print(f"[DB ERROR] Fetch group ID failed: {e}")
+        return None
+    finally:
+        if close_conn:
+            conn.close()
+
+            
+def add_user_to_group_db(username, group_name, conn=None):
+    """Adds a user to a specific group."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        
+        # 1. Get IDs
+        user_id = get_user_id_by_username(username, conn)
+        group_id = get_group_id_by_name(group_name, conn)
+        
+        if user_id is None:
+            print(f"[DB ERROR] User '{username}' not found.")
+            return False
+        if group_id is None:
+            print(f"[DB ERROR] Group '{group_name}' not found.")
+            return False
+            
+        # 2. Add to junction table
+        cur.execute("""
+            INSERT INTO group_members (group_id, user_id) 
+            VALUES (?, ?)
+        """, (group_id, user_id))
+        
+        conn.commit()
+        print(f"[DB] User '{username}' added to group '{group_name}'.")
+        return True
+    except sqlite3.IntegrityError:
+        print(f"[DB ERROR] User '{username}' is already a member of group '{group_name}'.")
+        return False
+    except Exception as e:
+        print(f"[DB ERROR] Add user to group failed: {e}")
+        return False
+    finally:
+        if close_conn:
+            conn.close()
+
+def remove_user_from_group_db(username, group_name, conn=None):
+    """Removes a user from a specific group."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        
+        # 1. Get IDs (از توابعی که قبلاً تعریف شدند استفاده می‌کنیم)
+        user_id = get_user_id_by_username(username, conn)
+        group_id = get_group_id_by_name(group_name, conn)
+        
+        if user_id is None:
+            print(f"[DB ERROR] User '{username}' not found.")
+            return False
+        if group_id is None:
+            print(f"[DB ERROR] Group '{group_name}' not found.")
+            return False
+            
+        # 2. Delete from junction table
+        cur.execute("""
+            DELETE FROM group_members 
+            WHERE group_id = ? AND user_id = ?
+        """, (group_id, user_id))
+        
+        row_count = cur.rowcount
+        conn.commit()
+        
+        if row_count > 0:
+            print(f"[DB] User '{username}' removed from group '{group_name}'.")
+            return True
+        else:
+            print(f"[DB] User '{username}' was not a member of group '{group_name}' or already removed.")
+            return False
+            
+    except Exception as e:
+        print(f"[DB ERROR] Remove user from group failed: {e}")
+        return False
+    finally:
+        if close_conn:
+            conn.close()
+
+def get_group_members_db(group_name, conn=None):
+    """
+    Fetches the usernames of all members in a specific group 
+    by joining the 'users', 'groups', and 'group_members' tables.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+        
+    try:
+        cur = conn.cursor()
+        
+        # SQL query to join the three tables and filter by group name
+        cur.execute("""
+            SELECT T1.username 
+            FROM users T1
+            JOIN group_members T2 ON T1.user_id = T2.user_id
+            JOIN groups T3 ON T2.group_id = T3.group_id
+            WHERE T3.name = ?
+            ORDER BY T1.username ASC
+        """, (group_name,))
+        
+        # Fetch results and return them as a list of usernames
+        members = [row[0] for row in cur.fetchall()]
+        
+        if not members:
+            # بررسی می‌کنیم که آیا اصلاً گروهی با این نام وجود دارد یا خیر
+            if get_group_id_by_name(group_name, conn) is None:
+                print(f"[DB INFO] Group '{group_name}' not found.")
+            else:
+                print(f"[DB INFO] Group '{group_name}' found, but has no members.")
+        
+        return members
+    
+    except Exception as e:
+        print(f"[DB ERROR] Fetch group members failed: {e}")
+        return []
+    finally:
+        if close_conn:
+            conn.close()
+
+
+
+def get_user_groups_db(username, conn=None):
+    """
+    Fetches the names of all groups a specific user is a member of 
+    by joining the 'users', 'groups', and 'group_members' tables.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+        
+    try:
+        cur = conn.cursor()
+        
+        # 1. Get user_id for the given username
+        user_id = get_user_id_by_username(username, conn)
+        
+        if user_id is None:
+            print(f"[DB ERROR] User '{username}' not found.")
+            return []
+
+        # 2. SQL query to join the three tables and filter by user ID
+        # T1: groups, T2: group_members, T3: users (user_id is already known, but good for context)
+        cur.execute("""
+            SELECT T1.name 
+            FROM groups T1
+            JOIN group_members T2 ON T1.group_id = T2.group_id
+            WHERE T2.user_id = ?
+            ORDER BY T1.name ASC
+        """, (user_id,))
+        
+        # Fetch results and return them as a list of group names
+        groups = [row[0] for row in cur.fetchall()]
+        
+        if not groups:
+            print(f"[DB INFO] User '{username}' is not a member of any groups.")
+        
+        return groups
+    
+    except Exception as e:
+        print(f"[DB ERROR] Fetch user groups failed: {e}")
+        return []
+    finally:
+        if close_conn:
+            conn.close()

@@ -87,8 +87,14 @@ class ChatServer:
     def request_get_all_users(self, username):
         self.send_private_update(msg=models.get_all_users_db(), recipient=username, type="RecAllUser")
 
+    def request_get_all_groups(self, username):
+        self.send_private_update(msg=models.get_all_groups_db(), recipient=username, type="RECALLGROUPS")
+
+    def request_get_user_groups(self, username):
+        print(username)
+        self.send_private_update(msg=models.get_user_groups_db(username), recipient=username, type="RECUSERGROUPS")
+
     def send_private_update(self, msg, recipient, type):
-        users_with_status = self.get_all_users_with_status()
         recipient_socket = None
         with self.lock:
             recipient_socket = self.clients.get(recipient)
@@ -251,7 +257,9 @@ class ChatServer:
             # if username != "admin": 
             #     # self.broadcast_message(f"{username} joined", "SERVER")
             #     send_control(client_socket, {"type": "FILE_LIST", "files": self.available_files}) 
-            
+            if username == "admin":
+                print("admin is here")
+
             while True:
                 msg = recv_control(client_socket)
                 
@@ -261,6 +269,14 @@ class ChatServer:
 
                 elif msg["type"] == "GetAllUser":
                     self.request_get_all_users(username=msg["username"])
+                    continue
+                
+                elif msg["type"] == "GETALLGROUPS":
+                    self.request_get_all_groups(username=msg["username"])
+                    continue
+
+                elif msg["type"] == "GETUSERGROUPS":
+                    self.request_get_user_groups(username = msg["username"])
                     continue
 
                 elif msg["type"] == "get_status":
@@ -311,8 +327,9 @@ class ChatServer:
                 elif msg["type"] == "BYE":
                      return
                     
-        except ConnectionError:
-            pass 
+        # except ConnectionError:
+        #     # print(f"error: ConnectionError")
+        #     pass 
 
         except Exception as e:
             print(f"[SERVER ERROR] Error handling client {username}: {e}")

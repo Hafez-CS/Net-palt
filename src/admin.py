@@ -7,11 +7,13 @@ import time
 import threading
 import bcrypt
 import sys
+from screeninfo import get_monitors
 
 HOST = "127.0.0.1"
 PORT = 5001
 RUNNING = False
-
+RELOAD = 2
+is_running = False
 
 def start_server():
     global server
@@ -23,6 +25,25 @@ def start_server():
         sys.exit()
     finally:
         RUNNING = True
+
+def connect_to_server(username, page):
+    global is_running
+    #networking 
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((HOST, PORT))
+
+    # Introduce to server
+    send_control(client, {"type": "HELLO", "username": username})
+    is_running = True
+
+    recv_msg_thread = threading.Thread(target=recv_loop, args=(client, page), daemon=True)
+    recv_msg_thread.start()
+
+    updata_user_thread = threading.Thread(target=get_all_users, args=(client, username), daemon=True)
+    updata_user_thread.start()
+
+    print("connected")
+    return client
 
 
 def hash_password(password):
@@ -63,17 +84,71 @@ class user_control(ft.Row):
             icon= ft.Icons.REMOVE_CIRCLE,
             on_click=self.remove_user
         )
+        self.add_group_button = ft.ElevatedButton(
+            text="new group",
+            expand=True,
+            bgcolor=ft.Colors.BLUE_ACCENT, 
+            color=ft.Colors.WHITE, 
+            icon= ft.Icons.GROUP, 
+            on_click=self.add_group
+            )
 
         super().__init__(
             controls=[
                 self.kick_button,
                 self.add_user_button,
-                self.remove_user_button
+                self.remove_user_button,
+                self.add_group_button
             ],
             expand=True,
             alignment=ft.alignment.top_center
         )
-        
+    def add_group(self, e):
+        self.groupname_input = ft.TextField(label="Group name", width=300, max_length=20)
+        self.newgroup_dialog = ft.AlertDialog(
+            title="Add New Group",
+            content=ft.Container(
+
+                self.groupname_input
+                
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda e: e.page.close(self.newgroup_dialog)),
+                ft.ElevatedButton("Add", on_click=self.confirm_newgroup),
+            ]
+        )
+        e.page.open(self.newgroup_dialog)
+
+    def confirm_newgroup(self, e):
+        self.groupname = self.groupname_input.value
+        if not self.groupname:
+            self.groupname_input.error_text = "the group name can't be empty"
+            self.newgroup_dialog.update()
+        self.res_alert = ft.AlertDialog(
+            title="Add New Group",
+            actions=[
+                ft.TextButton("Ok", on_click=lambda e: e.page.close(self.res_alert))
+            ],
+            actions_alignment=ft.MainAxisAlignment.CENTER
+        )
+        try:
+            #adding new group to database
+            res = models.add_group_db(self.groupname)
+
+            #showing alert based on db result
+            if res:
+                self.res_alert.content = ft.Text("successful", color=ft.Colors.GREEN, size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
+                e.page.open(self.res_alert)
+            elif res == None:
+                self.res_alert.content = ft.Text("this group exists", color=ft.Colors.RED, size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
+                e.page.open(self.res_alert)
+            elif res == False:
+                raise
+        except:
+            self.res_alert.content = ft.Text("something went wrong", color=ft.Colors.RED, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
+            e.page.open(self.res_alert)
+
+
     def add_user(self,e):
         self.username_input = ft.TextField(label="Username", width=300)
         self.password_input = ft.TextField(label="Password", width=300, password=True, can_reveal_password=True)
@@ -143,7 +218,7 @@ class user_control(ft.Row):
 
     #build a dropdown for showing all users
     def build_user_dropdown(self):
-        self.users_list = get_all_users()
+        self.users_list = users_list
         options = []
         for user in self.users_list:
             options.append(
@@ -210,6 +285,207 @@ class user_control(ft.Row):
                 print(f"something went wrong in removing user: {e}")
             finally:
                 e.page.close(self.remove_alert)
+
+class Group(ft.Container):
+    def __init__(self, group_name, avatar):
+        super().__init__(
+                        height=65,
+                        width=280,
+                        border_radius=10,
+                        margin= ft.margin.only(0,0,0,5),
+                        ink=True,
+                        on_click=self.group_profile
+                        )
+
+        self.group_name = group_name
+        self.avatar = avatar
+        self.is_cliked = False
+        avatar_stack = ft.Stack(
+                [
+                    ft.CircleAvatar(
+                        foreground_image_src=self.avatar,
+
+                    ),
+
+                ],
+                width=40,
+                height=40,
+            )
+        
+        self.content = ft.Row(
+                    [
+                        avatar_stack,
+                        ft.Text(self.group_name, size=20),                       
+                    ],
+                    
+            )
+    def group_profile(self, e):
+        self.group_avatar = ft.Container(
+            ft.CircleAvatar(ft.Image(src=self.avatar), radius=30),
+            border_radius=30
+        )
+        self.group_name_text = ft.Text(self.group_name, text_align=ft.TextAlign.CENTER, size=24, color=ft.Colors.WHITE)
+        self.header = ft.Container(
+            ft.Row(
+                controls=[
+                    self.group_avatar,
+                    self.group_name_text
+                ]
+            ),
+            padding=10,
+            bgcolor="#00476A",
+            border_radius=10
+        )
+        self.add_user_button = ft.ElevatedButton("Add New User", color=ft.Colors.WHITE, bgcolor=ft.Colors.GREEN, expand=True, on_click=self.add_user)
+        self.remove_user_button = ft.ElevatedButton("remove User", color=ft.Colors.WHITE, bgcolor=ft.Colors.RED, expand=True )
+        self.body = ft.Container(
+            ft.ListView(
+                controls=[],
+                spacing=10,
+                height=500
+                
+            ),
+            padding=10,
+            border_radius=10,
+
+        )
+        
+
+        self.group_alert = ft.AlertDialog(
+            title=f"{self.group_name} - Profile",
+            content=ft.Column(
+                [
+                    self.header,
+                    ft.Divider(),
+                    self.body
+                ]
+            ),
+            bgcolor="#023047",
+        )
+
+        #refreshing group members
+        self.update_group_members()
+        e.page.open(self.group_alert)
+
+    def update_group_members(self):
+        self.group_members = models.get_group_members_db(group_name=self.group_name)
+        self.body.content.controls.clear()
+        #adding buttons
+        self.body.content.controls.append(self.add_user_button)
+        self.body.content.controls.append(self.remove_user_button)
+        #adding members
+        if len(self.group_members) > 0:
+            for member in self.group_members:
+                mem = ft.Container(
+                    ft.Row(
+                        controls=[
+                            ft.Icon(ft.Icons.PERSON_ROUNDED, size=20),
+                            ft.Text(member, size=16, expand=True),
+                            ft.IconButton(ft.Icons.HIGHLIGHT_REMOVE_ROUNDED, icon_color=ft.Colors.RED, on_click=lambda e, m=member: self.remove_user_from_group(e, m))
+                        ]
+                    ),
+                    padding=10,
+                    border_radius=10,
+                    bgcolor="#00476A"
+                )
+                
+                
+                
+                self.body.content.controls.append(mem)
+    def remove_user_from_group(self, e, username):
+        try:
+            res = models.remove_user_from_group_db(username, self.group_name)
+            if res:
+                self.update_group_members()
+            else:
+                raise
+        except Exception as e:
+            e.page.open(ft.AlertDialog(
+                    title="ERROR",
+                    content=ft.Text(e),
+                    actions=ft.TextButton("OK")
+                ))
+
+
+    def add_user(self, e):
+        self.users = users_list
+        self.submit_button = ft.ElevatedButton("submit", color=ft.Colors.WHITE, bgcolor=ft.Colors.GREEN, on_click=self.submit_add_user)
+        self.list_users = ft.ListView()
+        self.user_checkboxes = {}
+        self.selected_users = []
+
+        for user in self.users:
+            chk = ft.Checkbox(label=user)
+            self.user_checkboxes[user] = chk
+
+        users_col = ft.Column(
+            controls=list(self.user_checkboxes.values())
+        )
+
+        # for _, chk in self.user_checkboxes.items():
+        #     users_col.controls.append(chk)
+
+
+        self.add_user_alert = ft.AlertDialog(
+            title="Select Users",
+            content=ft.Column(
+                controls=[
+                    users_col,
+                    self.submit_button
+                ],
+                spacing=10
+                
+            ),
+        )
+        e.page.open(self.add_user_alert)
+
+    def submit_add_user(self, e):
+        self.selected_users.clear()
+        for name, checkbox in self.user_checkboxes.items():
+            if checkbox.value:  
+                self.selected_users.append(name)
+        
+        for checkbox in self.user_checkboxes.values():
+            checkbox.value = False
+
+        if self.selected_users:
+            e.page.close(self.add_user_alert)
+            
+            try:
+                add_res = {}
+                for user in self.selected_users:
+                    res = models.add_user_to_group_db(username=user, group_name=self.group_name)
+                    add_res[user] = res
+                print(add_res)
+            except Exception as e:
+                e.page.open(ft.AlertDialog(
+                    title="ERROR",
+                    content=ft.Text(e),
+                    actions=ft.TextButton("OK")
+                ))
+                
+            success_alert = ft.AlertDialog(
+                title="successful",
+                title_text_style=ft.TextStyle(color=ft.Colors.GREEN, size=28, weight=ft.FontWeight.BOLD),
+                content=ft.Text("users are successfully added.", size=24, color=ft.Colors.WHITE, weight=ft.FontWeight.NORMAL, text_align=ft.TextAlign.CENTER),
+                actions=[
+                    ft.TextButton("Ok", on_click=lambda e: e.page.close(success_alert))
+                ]
+                )
+            e.page.open(success_alert)
+
+            
+
+        else:
+            if not self.is_cliked:
+                self.add_user_alert.content.controls.append(
+                    ft.Text("please select a user first!", size=18, color=ft.Colors.RED, weight=ft.FontWeight.NORMAL, text_align=ft.TextAlign.CENTER)
+                )
+                e.page.update()
+            self.is_cliked = True
+
+        print(self.selected_users)
+        e.page.update()
 
 
 class online_user(ft.Container):
@@ -278,10 +554,20 @@ class online_user(ft.Container):
         print("clicked")
 
 
-def get_all_users():
-    models.init_db()
-    users = models.get_all_users_db()
-    return users
+def get_all_users(client, username):
+    global is_running
+
+    while is_running:
+
+        request_msg = {"type": "GetAllUser", "username": username}
+        send_control(sock=client, data=request_msg)
+        time.sleep(RELOAD)
+        
+        request_msg = {"type": "GETALLGROUPS", "username": username}
+        send_control(sock=client, data=request_msg)
+        time.sleep(RELOAD)
+
+
 
 def send_control(sock, data: dict):
     """Send a JSON control message with a fixed header length"""
@@ -306,55 +592,94 @@ def recv_control(sock):
     j = recv_all(sock, length)
     return json.loads(j.decode('utf-8'))
 
+def recv_loop(client, page):
+    global is_running
+    global current_recipient
 
-def connect_to_server(username):
-    #networking 
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((HOST, PORT))
-    # Introduce to server
-    send_control(client, {"type": "HELLO", "username": username})
-    is_running = True
-    # threading.Thread(target=recv_loop, daemon=True).start()
-    print("connected")
-    return client
+    try:
+        while is_running:
+            msg = recv_control(client)
+            # if msg["type"] == "PMSG_RECV":
+            #     if current_recipient == msg["username"]:
+            #         show_message(msg, page)
+            #         page.update()
+        
+            if msg["type"] == "RecAllUser":
+                refresh_users(page, msg["text"], is_group=False)
+            elif msg["type"] == "RECALLGROUPS":
+                refresh_users(page, is_group=True, groups=msg["text"])
+            # elif msg["type"] == "RECV_HISTORY":
+            #     update_user_messages(page, msg["text"])
+
+                # if msg["type"] == "MSG":
+                #     self.show_msg(f"{msg['username']}: {msg['text']}")
+                # elif msg["type"] == "USER_JOIN":
+                #     self.show_msg(f"[{msg['username']} joined]")
+                # elif msg["type"] == "USER_LEFT":
+                #     self.show_msg(f"[{msg['username']} left]")
+                # elif msg["type"] == "SERVER_CLOSE": 
+                #     self.show_msg(f"[SERVER]: {msg.get('message', 'Server has closed.')}")
+                #     break
+                # elif msg["type"] == "ERROR":
+                #     self.show_msg("[Error: " + msg.get("message","") + "]")
+    except socket.error as e:
+        if is_running:
+            print("[CONNECTION LOST] Admin panel connection to server closed unexpectedly.")
+    except Exception as e:
+        print("Error in user recv loop:", e)
+    finally:
+        is_running = False 
+        pass
 
 
-def get_online_users():
-    pass
 
-def refresh_users(page):
+
+def refresh_users(page, users: list = None, is_group: bool= False, groups: list = None):
     global refresh_thread_running
+    global users_list
+    refresh_thread_running = True # Set the flag when thread starts   
 
-    refresh_thread_running = True # Set the flag when thread starts
-    print("Refresh thread started.")
-    
-    # Loop while the global flag is True
-    while refresh_thread_running: 
+    if refresh_thread_running: 
         try:
-            online_users_container.controls.clear()
-            all_users = get_all_users()
-            for user in all_users:
-                # Assuming ChatServer and online_user are defined and work
-                online_users_container.controls.append(
-                    online_user(user, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png")
-                )
-            page.update()
+            
+            if not is_group:
+                users_list = users
+                online_users_container.controls.clear()
+                for user in users:
+                    # Assuming ChatServer and online_user are defined and work
+                    online_users_container.controls.append(
+                        online_user(user, avatar="assets/profile.png")
+                    )
+                page.update()
+            elif is_group:
+                all_groups_container.controls.clear()
+                for group in groups:
+                    all_groups_container.controls.append(Group(group_name=group, avatar="assets/profile.png"))
+                page.update()
+
         except Exception as e:
             # Handle exceptions during update/network operations
             print(f"Error in refresh_users: {e}") 
         
         # Check flag again before sleeping
-        if refresh_thread_running: 
-            time.sleep(2)
-    
-    print("Refresh thread safely stopped.")
+        # if refresh_thread_running: 
+        #     time.sleep(2)
+    else:
+        print("Refresh thread safely stopped.")
 
 
 def admin(page):
     global username
     global online_users_container
     global refresh_thread_running
+    global all_groups_container
 
+    width, height = get_monitor_info()
+    """Creates the login screen View."""
+    page.window.height = height // 1.5
+    page.window.width = width // 1.5
+    time.sleep(0.5)
+    page.window.center()
     # username = page.session.get("current_username")
     username = "admin"
 
@@ -384,9 +709,9 @@ def admin(page):
     try:
         #starting the server
         start_server()
-        time.sleep(1)
+        time.sleep(0.5)
         #coneccting to server as a client
-        client = connect_to_server(username)
+        client = connect_to_server(username, page)
     except Exception as e:
         print(f"Error : {e}")
     # users_status = ChatServer.get_all_users_with_status()
@@ -396,21 +721,52 @@ def admin(page):
 
     online_users_container = ft.ListView(
         controls=[],
+    )
+
+    all_groups_container = ft.ListView(
+        controls=[]
+    )
+
+    contact_tab = ft.Tab(
+            text="Contacts",
+            content=ft.Container(
+                content= online_users_container,
+                border_radius=10,
+                bgcolor="#002A46",
+            )
+        )
+    
+    group_tab = ft.Tab(
+        text="Groups",
+        content=ft.Container(
+            all_groups_container,
+            border_radius=10,
+            bgcolor="#002A46",
+        )
+    )
+    
+    tabs = [
+        contact_tab,
+        group_tab
+    ]
+
+    tabs_container = ft.Container(
+        ft.Tabs(
+        selected_index=0,
+        animation_duration=300,
+        tabs=tabs,
+        scrollable=True,
+        ),
+        expand=1,
         height=700,
-        width=300,
-    )
-
-    users_section = ft.Container(
-        online_users_container,
         border_radius=10,
-        bgcolor= ft.Colors.GREY_900,
-        padding=10,
-        height=700
+        bgcolor="#002A46",
+        padding=10
+
     )
 
-
-    refresh_users_thread = threading.Thread(target=refresh_users, args=(page,), daemon=True)
-    refresh_users_thread.start()
+    # refresh_users_thread = threading.Thread(target=refresh_users, args=(page,), daemon=True)
+    # refresh_users_thread.start()
 
 
 #it contains the messages
@@ -492,7 +848,7 @@ def admin(page):
         
         ),
         bgcolor="#002D44",
-        expand=True,
+        expand=3,
         height=700,
         alignment=ft.alignment.bottom_center,
         padding=ft.padding.all(5),
@@ -505,7 +861,7 @@ def admin(page):
         controls=[
             ft.Row(
                 [
-                    users_section,
+                    tabs_container,
                     control_container
                 ]
 
@@ -515,4 +871,16 @@ def admin(page):
     )
 
 
+
+def get_monitor_info():
+    for m in get_monitors():
+        if m.is_primary:
+            primary_monitor = m
+            break
+    
+    if primary_monitor:
+        width = primary_monitor.width
+        height = primary_monitor.height
+
+    return width, height
 
