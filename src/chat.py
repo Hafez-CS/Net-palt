@@ -6,10 +6,10 @@ import json
 import os
 import time
 from screeninfo import get_monitors
+import random
 
-
-HOST = "192.168.43.213"
-# HOST = "127.0.0.1"
+# HOST = "192.168.43.213"
+HOST = "127.0.0.1"
 
 PORT = 5001
 is_running = False 
@@ -17,6 +17,14 @@ DOWNLOAD_DIR = "downloaded/"
 RELOAD = 2
 current_recipient = None
 
+colors = {
+    "red" : ft.Colors.RED,
+    "blue" : ft.Colors.BLUE,
+    "white" : ft.Colors.WHITE,
+    "black" : ft.Colors.BLACK,
+    "grey" : ft.Colors.GREY,
+    "green" : ft.Colors.GREEN
+}
 
 def setup_download_directory(directory_name):
     if not os.path.exists(directory_name):
@@ -54,7 +62,12 @@ def get_all_users(client, username):
     global is_running
 
     while is_running:
+
         request_msg = {"type": "GetAllUser", "username": username}
+        send_control(sock=client, data=request_msg)
+        time.sleep(RELOAD)
+        
+        request_msg = {"type": "GETUSERGROUPS", "username": username}
         send_control(sock=client, data=request_msg)
         time.sleep(RELOAD)
 
@@ -125,7 +138,10 @@ def recv_loop(client, page):
                     page.update()
         
             elif msg["type"] == "RecAllUser":
-                update_contacts_ui(page, msg["text"])
+                update_contacts_ui(page, msg["text"], is_group=False)
+
+            elif msg["type"] == "RECUSERGROUPS":
+                update_contacts_ui(page, is_group=True, groups=msg["text"])
 
             elif msg["type"] == "RECV_HISTORY":
                 update_user_messages(page, msg["text"])
@@ -140,15 +156,52 @@ def recv_loop(client, page):
                 #     self.show_msg(f"[SERVER]: {msg.get('message', 'Server has closed.')}")
                 #     break
                 # elif msg["type"] == "ERROR":
-                #     self.show_msg("[Error: " + msg.get("message","") + "]")
+                #     self.show_msg("[Error: " + msg.get("message","") + "]")elif msg["type"] == "RECALLGROUPS":
+            #     refresh_users(page, is_group=True, groups=msg["text"])
     except socket.error as e:
         if is_running:
             print("[CONNECTION LOST] Admin panel connection to server closed unexpectedly.")
+            page.window.destroy()
+
+
     except Exception as e:
         print("Error in user recv loop:", e)
     finally:
         is_running = False 
         pass
+
+class Group(ft.Container):
+    def __init__(self, group_name, avatar):
+        super().__init__(
+                        height=65,
+                        width=280,
+                        border_radius=10,
+                        margin= ft.margin.only(0,0,0,5),
+                        ink=True,
+                        # on_click=self.group_profile
+                        )
+
+        self.group_name = group_name
+        self.avatar = avatar
+        self.is_cliked = False
+        avatar_stack = ft.Stack(
+                [
+                    ft.CircleAvatar(
+                        foreground_image_src=self.avatar,
+                        bgcolor= colors["green"]
+                    ),
+                ],
+                width=40,
+                height=40,
+            )
+        
+        self.content = ft.Row(
+                [
+                    avatar_stack,
+                    ft.Text(self.group_name, size=20),                       
+                ],
+            )
+        
 
 class contact:
     def __init__(self,page, name, image_path):
@@ -208,16 +261,28 @@ class contact:
 
     
     
-def update_contacts_ui(page, users):
-    global main_container
+def update_contacts_ui(page, users: list = None, is_group: bool= False, groups: list = None):
+    global refresh_thread_running
+    global users_list
+    refresh_thread_running = True # Set the flag when thread starts   
+    users_list = users
 
-    main_container.content.controls.clear()
+    if refresh_thread_running:
+        try:
+            if not is_group:
+                online_users_container.controls.clear() 
+                for user in users:
+                    online_users_container.controls.append(
+                        contact(page, user, image_path="assets/profile.png").container
+                    )
+            elif is_group:
+                all_groups_container.controls.clear()
+                for group in groups:
+                    all_groups_container.controls.append(Group(group_name=group, avatar="assets/profile.png"))
 
-    for user in users:
-        user = contact(page, user, "assets/profile.png")
-        contact_container = user.container
-        main_container.content.controls.append(contact_container)
-        
+        except Exception as e:
+            print(f"Error in refresh_users: {e}") 
+
     page.update()
     print("cantacts are reloaded!")
 
@@ -269,7 +334,8 @@ def user_chat(page):
     global send_button
     global select_file_button
     global username
-    global main_container
+    global online_users_container
+    global all_groups_container
     global client
 
     width, height = get_monitor_info()
@@ -279,6 +345,7 @@ def user_chat(page):
     # page.window.resizable = False
     page.window.center()
 
+    # page.session.set("current_username", "sadra")
     username = page.session.get("current_username")
     # username = "sadra"
     client = connect_to_server(username)
@@ -314,19 +381,13 @@ def user_chat(page):
 
         page.update()
 
-    
-
-
-    main_container = ft.Container(
-        content= ft.ListView(
-            # width=450,
-            height=600,
-            expand=True,
-        ),
-        border_radius=10,
-        width=450,
-        bgcolor="#002A46",
-        expand=1
+    #it contains users in contact tab
+    online_users_container = ft.ListView(
+            controls=[]
+        )
+    #it contains groups in group tab
+    all_groups_container = ft.ListView(
+        controls=[]
     )
 
     #it contains the messages
@@ -393,26 +454,44 @@ def user_chat(page):
     )
 
 
-    print("before tab")
-    tabs = [
-        ft.Tab(
+    contact_tab = ft.Tab(
             text="Contacts",
             content=ft.Container(
-                ft.Text("hello"),
-                ft.Text("im here"),
+                content= online_users_container,
+                border_radius=10,
+                bgcolor="#002A46",
             )
-        ),
+        )
+    
+    group_tab = ft.Tab(
+        text="Groups",
+        content=ft.Container(
+            all_groups_container,
+            border_radius=10,
+            bgcolor="#002A46",
+        )
+    )
+    
+    tabs = [
+        contact_tab,
+        group_tab
     ]
 
-    all_tabs = ft.Tabs(
+    tabs_container = ft.Container(
+        ft.Tabs(
         selected_index=0,
         animation_duration=300,
         tabs=tabs,
         scrollable=True,
+        ),
+        expand=1,
+        height=700,
+        border_radius=10,
+        bgcolor="#002A46",
+        padding=10
 
-    ) 
+    )
 
-    print("after tab")
 
 
 
@@ -440,7 +519,7 @@ def user_chat(page):
         "/main",
         [
             ft.Row(controls=[
-                main_container,
+                tabs_container,
                 chat_container,
                 # ft.Container(all_tabs)
                 ]

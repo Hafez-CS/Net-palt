@@ -515,3 +515,50 @@ def get_group_members_db(group_name, conn=None):
     finally:
         if close_conn:
             conn.close()
+
+
+
+def get_user_groups_db(username, conn=None):
+    """
+    Fetches the names of all groups a specific user is a member of 
+    by joining the 'users', 'groups', and 'group_members' tables.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+        
+    try:
+        cur = conn.cursor()
+        
+        # 1. Get user_id for the given username
+        user_id = get_user_id_by_username(username, conn)
+        
+        if user_id is None:
+            print(f"[DB ERROR] User '{username}' not found.")
+            return []
+
+        # 2. SQL query to join the three tables and filter by user ID
+        # T1: groups, T2: group_members, T3: users (user_id is already known, but good for context)
+        cur.execute("""
+            SELECT T1.name 
+            FROM groups T1
+            JOIN group_members T2 ON T1.group_id = T2.group_id
+            WHERE T2.user_id = ?
+            ORDER BY T1.name ASC
+        """, (user_id,))
+        
+        # Fetch results and return them as a list of group names
+        groups = [row[0] for row in cur.fetchall()]
+        
+        if not groups:
+            print(f"[DB INFO] User '{username}' is not a member of any groups.")
+        
+        return groups
+    
+    except Exception as e:
+        print(f"[DB ERROR] Fetch user groups failed: {e}")
+        return []
+    finally:
+        if close_conn:
+            conn.close()

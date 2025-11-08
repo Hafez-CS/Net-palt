@@ -4,8 +4,8 @@ import socket
 import json 
 from screeninfo import get_monitors
 
-# HOST = "127.0.0.1"
-HOST = "192.168.43.213"
+HOST = "127.0.0.1"
+# HOST = "192.168.43.213"
 PORT = 5001
 user_admin = {
     "username" : "admin",

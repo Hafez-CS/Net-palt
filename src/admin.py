@@ -648,13 +648,13 @@ def refresh_users(page, users: list = None, is_group: bool= False, groups: list 
                 for user in users:
                     # Assuming ChatServer and online_user are defined and work
                     online_users_container.controls.append(
-                        online_user(user, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png")
+                        online_user(user, avatar="assets/profile.png")
                     )
                 page.update()
             elif is_group:
                 all_groups_container.controls.clear()
                 for group in groups:
-                    all_groups_container.controls.append(Group(group_name=group, avatar="/home/sadra/Desktop/Chatroom/src/assets/profile.png"))
+                    all_groups_container.controls.append(Group(group_name=group, avatar="assets/profile.png"))
                 page.update()
 
         except Exception as e:
