@@ -118,13 +118,15 @@ def init_db():
             CREATE TABLE IF NOT EXISTS messages (
                 message_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_user_id INTEGER NOT NULL,
-                recipient_user_id INTEGER, -- NULL for public/broadcast messages
+                recipient_user_id INTEGER, -- For private/direct messages (DM)
+                group_id INTEGER,          -- New: For group messages
                 text TEXT NOT NULL,
                 sent_at INTEGER NOT NULL,
                 is_group_message BOOLEAN NOT NULL DEFAULT 0,
                 
                 FOREIGN KEY (sender_user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-                FOREIGN KEY (recipient_user_id) REFERENCES users (user_id) ON DELETE SET NULL
+                FOREIGN KEY (recipient_user_id) REFERENCES users (user_id) ON DELETE SET NULL,
+                FOREIGN KEY (group_id) REFERENCES groups (group_id) ON DELETE CASCADE -- New Foreign Key
             )""")
             
         # Add initial admin user if not exists
@@ -235,37 +237,54 @@ def get_user_id_by_username(username, conn=None):
             conn.close()
 
 
-def add_message_db(sender_username, recipient_username, text, is_group=False, conn=None):
-    """Logs a new message (public or private) to the database."""
+def add_message_db(sender_username, recipient_username=None, group_name=None, text=None, conn=None):
+    """Logs a new message (private or group) to the database."""
     close_conn = False
     if conn is None:
         conn = get_db_connection()
         close_conn = True
+        
+    # Input validation
+    if not text or (recipient_username and group_name) or (not recipient_username and not group_name):
+        print("[DB ERROR] Invalid arguments for message: Must provide text and either a recipient_username (for DM) or a group_name (for group chat).")
+        return False
+        
     try:
         cur = conn.cursor()
-        
-        # Get user IDs
         sender_id = get_user_id_by_username(sender_username, conn)
-        recipient_id = get_user_id_by_username(recipient_username, conn) if recipient_username else None
-        
+        current_time = int(time.time())
+
         if sender_id is None:
             print(f"[DB ERROR] Sender '{sender_username}' not found.")
             return False
 
-        # If it's a private message, ensure recipient is valid (unless public)
-        if recipient_username and recipient_id is None:
-             print(f"[DB ERROR] Recipient '{recipient_username}' not found.")
-             return False
-
-        current_time = int(time.time()) # time.time() is used for INTEGER timestamps
+        recipient_id = None
+        group_id_val = None
+        is_group = 0
         
+        # Determine if it's a DM or Group Message
+        if group_name:
+            group_id_val = get_group_id_by_name(group_name, conn)
+            if group_id_val is None:
+                print(f"[DB ERROR] Group '{group_name}' not found.")
+                return False
+            is_group = 1
+            
+        elif recipient_username:
+            recipient_id = get_user_id_by_username(recipient_username, conn)
+            if recipient_id is None:
+                 print(f"[DB ERROR] Recipient '{recipient_username}' not found.")
+                 return False
+                 
+        # Insert the message
         cur.execute("""
-            INSERT INTO messages (sender_user_id, recipient_user_id, text, sent_at, is_group_message)
-            VALUES (?, ?, ?, ?, ?)
-        """, (sender_id, recipient_id, text, current_time, 1 if is_group else 0))
+            INSERT INTO messages (sender_user_id, recipient_user_id, group_id, text, sent_at, is_group_message)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (sender_id, recipient_id, group_id_val, text, current_time, is_group))
         
         conn.commit()
         return True
+        
     except Exception as e:
         print(f"[DB ERROR] Add message failed: {e}")
         return False
@@ -273,7 +292,6 @@ def add_message_db(sender_username, recipient_username, text, is_group=False, co
         if close_conn:
             conn.close()
 
-# models.py (Add this function)
 
 def get_historical_messages_db(user1_username, user2_username, conn=None):
     """
@@ -333,6 +351,75 @@ def get_historical_messages_db(user1_username, user2_username, conn=None):
         if close_conn:
             conn.close()
 
+def get_group_id_by_name(group_name, conn=None):
+    """Fetches group ID by group name."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT group_id FROM groups WHERE name = ?", (group_name,))
+        result = cur.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        print(f"[DB ERROR] Fetch group ID failed: {e}")
+        return None
+    finally:
+        if close_conn:
+            conn.close()
+
+            
+def get_group_historical_messages_db(group_name, conn=None):
+    """
+    Fetches all messages for a specific group, ordered by time,
+    and returns the sender username, message text, and timestamp.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+        
+    try:
+        cur = conn.cursor()
+        
+        # 1. Get group ID
+        group_id = get_group_id_by_name(group_name, conn)
+        
+        if group_id is None:
+            print(f"[DB ERROR] Group '{group_name}' not found for message history.")
+            return []
+
+        # 2. SQL query to select group messages (is_group_message=1 and matching group_id)
+        # We join with the 'users' table to get the human-readable sender username.
+        cur.execute("""
+            SELECT T1.username AS sender, T2.text, T2.sent_at 
+            FROM users T1
+            JOIN messages T2 ON T2.sender_user_id = T1.user_id
+            WHERE T2.group_id = ?
+            AND T2.is_group_message = 1 
+            ORDER BY T2.sent_at ASC
+        """, (group_id,))
+        
+        # Fetch results and format them
+        messages = []
+        for row in cur.fetchall():
+            messages.append({
+                "sender": row[0],
+                "text": row[1],
+                "sent_at": row[2] # Unix timestamp
+            })
+            
+        return messages
+    
+    except Exception as e:
+        print(f"[DB ERROR] Fetch group historical messages failed: {e}")
+        return []
+    finally:
+        if close_conn:
+            conn.close()
+
+
 def add_group_db(group_name, conn=None):
     """Adds a new group to the database."""
     close_conn = False
@@ -373,23 +460,7 @@ def get_all_groups_db(conn=None):
         if close_conn:
             conn.close()
 
-def get_group_id_by_name(group_name, conn=None):
-    """Fetches group ID by group name."""
-    close_conn = False
-    if conn is None:
-        conn = get_db_connection()
-        close_conn = True
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT group_id FROM groups WHERE name = ?", (group_name,))
-        result = cur.fetchone()
-        return result[0] if result else None
-    except Exception as e:
-        print(f"[DB ERROR] Fetch group ID failed: {e}")
-        return None
-    finally:
-        if close_conn:
-            conn.close()
+
 
             
 def add_user_to_group_db(username, group_name, conn=None):

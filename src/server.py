@@ -83,6 +83,10 @@ class ChatServer:
         messages = models.get_historical_messages_db(user1, user2)
         self.send_private_update(messages, user1, type="RECV_HISTORY")
 
+    def request_get_groupـhistory(self, group_name, username):
+        messages = models.get_group_historical_messages_db(group_name)
+        self.send_private_update(messages, username, type="RECVGROUPHISTORY")
+
 
     def request_get_all_users(self, username):
         self.send_private_update(msg=models.get_all_users_db(), recipient=username, type="RecAllUser")
@@ -169,7 +173,7 @@ class ChatServer:
            
     def send_private(self, msg, username, recipient):
         #check if the user is online
-        users_with_status = self.get_all_users_with_status()
+        # users_with_status = self.get_all_users_with_status()
         """
         Sends a private message to a recipient. 
         Logs the message to the database and attempts to send over the socket if the recipient is online.
@@ -204,11 +208,62 @@ class ChatServer:
         models.add_message_db(
             sender_username=username,
             recipient_username=recipient,
-            text=msg["text"] if recipient_socket else msg,
-            is_group=False
+            text=msg["text"] if recipient_socket else msg
         )
 
         print("[PM] Message added to DB.")
+
+    def send_group(self, msg, username, recipient):
+        # 1. Log the message to the database immediately
+        # We need to explicitly call add_message_db with group_name
+        log_success = models.add_message_db(
+            sender_username=username,
+            group_name=recipient,
+            text=msg,
+        )
+        #in case we have a error
+        if not log_success:
+            print(f"[GMSG ERROR] Failed to log group message to DB for group: {recipient}")
+            return
+        print(f"[GMSG] Message logged to DB for group '{recipient}'. Attempting delivery.")
+
+
+        # 2. Get all members of the group from the DB
+        group_members = models.get_group_members_db(recipient)
+        
+        # Prepare the message for the client
+        print("before db")
+        msg_for_client = {
+            "type": "GMSG_RECV",
+            "username": username,
+            "text": msg,
+            "group_name": recipient
+        }
+        print("after db")
+        
+        online_members_count = 0
+        
+        # Iterate through members and send to those who are online
+        with self.lock:
+            for member_username in group_members:
+                # Do not send the message back to the sender
+                if member_username == username:
+                    continue
+                    
+                recipient_socket = self.clients.get(member_username)
+                
+                if recipient_socket:
+                    online_members_count += 1
+                    try:
+                        send_control(recipient_socket, msg_for_client)
+                    except:
+                        # Handle disconnection during send
+                        print(f"   -> FAILED to send to {member_username}. Removing client.")
+                        self.remove_client(member_username, recipient_socket)
+        
+        print(f"[GMSG] Message sent to {online_members_count} online members of group '{recipient}'.")
+
+
 
     def broadcast_admin(self, message):
         self.broadcast_message(message, "ADMIN")
@@ -285,12 +340,18 @@ class ChatServer:
                 elif msg["type"] == "GET_HISTORY":
                     self.request_get_historical_messages_db(msg["user1"], msg["user2"])
 
+                elif msg["type"] == "GETGROUPHISTORY":
+                    self.request_get_groupـhistory(group_name = msg["group_name"], username=msg["username"])
+                    continue
+
                 elif msg["type"] == "PMSG":
-                    text = msg["text"]
-                    sender = msg["username"]
-                    recipient = msg["recipient"]
-                    self.send_private(text, sender, recipient)
-                    
+                    self.send_private(msg=msg["text"] , username=msg["username"], recipient=msg["recipient"])
+                
+                elif msg["type"] == "GMSG":
+                    self.send_group(msg=msg["text"], username=msg["username"], recipient=msg["group_name"])
+                    print("success")
+
+
                 elif msg["type"] == "MSG":
                     # اگر ادمین پیام فرستاده، نیاز به برودکست نیست، فقط برای نمایش در پنل ادمین
                     # if username == "admin": 

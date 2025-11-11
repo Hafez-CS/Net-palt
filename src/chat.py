@@ -15,7 +15,8 @@ PORT = 5001
 is_running = False 
 DOWNLOAD_DIR = "downloaded/"
 RELOAD = 2
-current_recipient = None
+current_recipient = None 
+current_group = None
 
 colors = {
     "red" : ft.Colors.RED,
@@ -56,6 +57,18 @@ def get_historical_messages(user1, user2):
         send_control(client, msg)
     except Exception as e:
         print(f"something went wrong in get_historical_messages: {e}")
+
+
+def get_group_historical_messages(group_name: str):    
+    msg = {
+        "type": "GETGROUPHISTORY",
+        "group_name": group_name,
+        "username": username,
+    }
+    try:
+        send_control(client, msg)
+    except Exception as e:
+        print(f"something went wrong in get_group_historical_messages: {e}")
 
 
 def get_all_users(client, username):
@@ -132,11 +145,17 @@ def recv_loop(client, page):
     try:
         while is_running:
             msg = recv_control(client)
+
             if msg["type"] == "PMSG_RECV":
                 if current_recipient == msg["username"]:
                     show_message(msg, page)
                     page.update()
-        
+
+            if msg["type"] == "GMSG_RECV":
+                if current_group == msg["group_name"]:
+                        show_message(msg, page)
+                        page.update()
+
             elif msg["type"] == "RecAllUser":
                 update_contacts_ui(page, msg["text"], is_group=False)
 
@@ -145,6 +164,10 @@ def recv_loop(client, page):
 
             elif msg["type"] == "RECV_HISTORY":
                 update_user_messages(page, msg["text"])
+            
+            elif msg["type"] == "RECVGROUPHISTORY":
+                update_user_messages(page, msg["text"])
+
 
                 # if msg["type"] == "MSG":
                 #     self.show_msg(f"{msg['username']}: {msg['text']}")
@@ -178,12 +201,13 @@ class Group(ft.Container):
                         border_radius=10,
                         margin= ft.margin.only(0,0,0,5),
                         ink=True,
-                        # on_click=self.group_profile
+                        on_click=self.on_group_click
                         )
 
         self.group_name = group_name
         self.avatar = avatar
         self.is_cliked = False
+
         avatar_stack = ft.Stack(
                 [
                     ft.CircleAvatar(
@@ -202,6 +226,30 @@ class Group(ft.Container):
                 ],
             )
         
+
+    def on_group_click(self, e):
+        global current_group
+        global current_recipient
+
+        current_group = self.group_name
+        current_recipient = None
+
+
+        self.unlock_input()
+        chat_list_view.controls.clear()
+        chat_list_view.controls.append(
+            ft.Text(f" -- Chat With {current_group} -- ", size=20, weight=ft.FontWeight.BOLD)
+        )
+
+        e.page.update()
+
+        get_group_historical_messages(current_group)
+
+    def unlock_input(self):
+            if text_input.disabled and send_button.disabled and select_file_button.disabled:
+                text_input.disabled = False
+                send_button.disabled = False
+                select_file_button.disabled = False        
 
 class contact:
     def __init__(self,page, name, image_path):
@@ -240,7 +288,10 @@ class contact:
 
     def on_click(self, e):
         global current_recipient
+        global current_group
         current_recipient = self.name
+        current_group = None
+
         self.unlock_input()
         chat_list_view.controls.clear()
         chat_list_view.controls.append(
@@ -272,6 +323,10 @@ def update_contacts_ui(page, users: list = None, is_group: bool= False, groups: 
             if not is_group:
                 online_users_container.controls.clear() 
                 for user in users:
+                    
+                    if user == username:
+                        continue
+
                     online_users_container.controls.append(
                         contact(page, user, image_path="assets/profile.png").container
                     )
@@ -350,12 +405,32 @@ def user_chat(page):
     # username = "sadra"
     client = connect_to_server(username)
 
+
     def process_messege(e):
         msg = text_input.value
-        recipient = current_recipient
-        if msg:
+        if not msg:
+            return
+
+        if current_group:
+            # Send Group Message (GMSG)
             show_messege(msg.strip())
-            send_control(client, {"type": "PMSG","username": username, "recipient":recipient, "text": msg.strip()})
+            send_control(client, {
+                "type": "GMSG",
+                "group_name": current_group, 
+                "username": username, 
+                "text": msg.strip()
+            })
+            
+        elif current_recipient:
+            # Send Private Message (PMSG)
+            show_messege(msg.strip())
+            send_control(client, {
+                "type": "PMSG",
+                "recipient": current_recipient, 
+                "username": username, 
+                "text": msg.strip()
+            })
+
 
     def show_messege(msg):
         text_style = ft.TextStyle(size=16, color="#787878", italic=True)
